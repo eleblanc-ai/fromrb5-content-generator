@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@theme {
+  /* Purple accent scale */
+  --color-purple-50: oklch(97% 0.03 290);
+  --color-purple-100: oklch(93% 0.06 290);
+  --color-purple-200: oklch(87% 0.09 290);
+  --color-purple-300: oklch(78% 0.13 290);
+  --color-purple-400: oklch(68% 0.17 290);
+  --color-purple-500: oklch(58% 0.20 290);
+  --color-purple-600: oklch(48% 0.20 290);
+
+  /* Semantic tokens */
+  --color-canvas: oklch(99% 0 0);
+  --color-surface: oklch(97% 0.015 290);
+  --color-ink: oklch(18% 0 0);
+  --color-ink-muted: oklch(52% 0 0);
+  --color-border: oklch(90% 0.02 290);
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}

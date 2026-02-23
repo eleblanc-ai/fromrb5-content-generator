@@ -1,12 +1,30 @@
-# Ignore everything by default — this is a framework repo
-/*
+# Dependencies
+node_modules/
 
-# Allow framework files only
-!cosmo-instructions/
-!docs/
-!img/
-!VERSION
-!.gitignore
+# Build output
+dist/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
 
 # Personal notes
 todo
