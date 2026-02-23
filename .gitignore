@@ -1,0 +1,13 @@
+# Ignore everything by default — this is a framework repo
+/*
+
+# Allow framework files only
+!cosmo-instructions/
+!docs/
+!img/
+!VERSION
+!.gitignore
+
+# Personal notes
+todo
+todo-*
