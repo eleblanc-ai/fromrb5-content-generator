@@ -23,6 +23,9 @@ export default function ResultCard({ item }: Props) {
       {item.text_output && (
         <p className="text-sm text-ink leading-relaxed whitespace-pre-wrap">{item.text_output}</p>
       )}
+      {item.image_url && (
+        <img src={item.image_url} alt={item.prompt} className="w-full rounded-lg" />
+      )}
     </div>
   )
 }

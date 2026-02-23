@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { supabase } from '../../shared/config/supabase'
 import type { ContentItem } from '../../shared/config/supabase'
 
-type TextContentType = 'flyer_text' | 'tea_writeup' | 'communication'
+type AllContentType = 'flyer_text' | 'tea_writeup' | 'communication' | 'image'
 
-const CONTENT_TYPE_LABELS: Record<TextContentType, string> = {
+const CONTENT_TYPE_LABELS: Record<AllContentType, string> = {
   flyer_text: 'Flyer copy',
   tea_writeup: 'Tea writeup',
   communication: 'Communication',
+  image: 'Image',
 }
 
 interface Props {
@@ -16,7 +17,7 @@ interface Props {
 
 export default function GenerateForm({ onResult }: Props) {
   const [prompt, setPrompt] = useState('')
-  const [type, setType] = useState<TextContentType>('tea_writeup')
+  const [type, setType] = useState<AllContentType>('tea_writeup')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -27,7 +28,8 @@ export default function GenerateForm({ onResult }: Props) {
     setLoading(true)
     setError(null)
 
-    const { data, error: fnError } = await supabase.functions.invoke('generate-text', {
+    const functionName = type === 'image' ? 'generate-image' : 'generate-text'
+    const { data, error: fnError } = await supabase.functions.invoke(functionName, {
       body: { prompt, type },
     })
 
@@ -50,10 +52,10 @@ export default function GenerateForm({ onResult }: Props) {
         </label>
         <select
           value={type}
-          onChange={(e) => setType(e.target.value as TextContentType)}
+          onChange={(e) => setType(e.target.value as AllContentType)}
           className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-canvas text-ink focus:outline-none focus:ring-2 focus:ring-purple-400"
         >
-          {(Object.entries(CONTENT_TYPE_LABELS) as [TextContentType, string][]).map(
+          {(Object.entries(CONTENT_TYPE_LABELS) as [AllContentType, string][]).map(
             ([value, label]) => (
               <option key={value} value={value}>
                 {label}
