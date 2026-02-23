@@ -7,7 +7,7 @@
 
 ## Plan
 
-**Goal:** Initialize Supabase locally, create the `content_items` table migration with RLS and Storage bucket policies, and wire up the typed frontend client.
+**Goal:** Connect to a hosted Supabase project, apply the `content_items` schema with RLS and Storage bucket policies, and wire up the typed frontend client.
 
 **Files:**
 - `supabase/config.toml` — from `supabase init`
@@ -15,7 +15,7 @@
 - `src/shared/config/supabase.ts` — typed Supabase client singleton + Database types
 - `src/shared/config/supabase.test.ts` — client init tests
 
-**Outcome:** `supabase start` applies the migration cleanly. Frontend client initializes with typed schema access. `npm run verify` stays green.
+**Outcome:** Hosted Supabase has the required schema and Storage bucket. Frontend client initializes with typed schema access against cloud env vars. `npm run verify` stays green.
 
 **Verification:** `npm run verify` (tsc + eslint + vitest)
 
@@ -57,13 +57,14 @@ User: yes (approved)
 
 ---
 
-## Manual Verification Tasks
+## Manual Verification Tasks (Hosted Supabase)
 
-- [ ] Run `supabase start`
-- [ ] Run `supabase db reset` — migration applies without errors
-- [ ] Confirm `content_items` table exists in Supabase Studio (`http://localhost:54323`)
-- [ ] Confirm `content-images` Storage bucket exists
-- [ ] Add `.env` with `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` (from `supabase status`)
+- [ ] In Supabase dashboard, open **SQL Editor** and run the SQL from `supabase/migrations/20260223024445_create_content_items.sql`
+- [ ] In Supabase dashboard, verify table `public.content_items` exists with columns: `id`, `type`, `prompt`, `text_output`, `image_url`, `parent_id`, `created_at`
+- [ ] In Supabase dashboard, verify Storage bucket `content-images` exists and is public
+- [ ] In project root `.env`, set `VITE_SUPABASE_URL` to your project URL and `VITE_SUPABASE_ANON_KEY` to your publishable (anon) key
+- [ ] Run `npm run verify` and confirm all tests pass
+- [ ] Run `npm run dev`, load the app, and confirm there are no Supabase env/config errors in the browser console
 
 ---
 
