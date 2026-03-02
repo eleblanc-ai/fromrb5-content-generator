@@ -73,7 +73,3 @@ You can have natural conversations with the user:
 **Quality gates** - Every slice must verify (tests + build)
 **State management** - Always resumable from any point
 
----
-
-**Read `workflow.md` first to understand the complete process.**
-

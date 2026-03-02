@@ -22,14 +22,7 @@ npm install -D tailwindcss @tailwindcss/vite vitest @vitest/ui jsdom @testing-li
 
 ## Project Structure
 
-Use the 3-bucket pattern:
-
-```
-src/
-├── app/           ← Application shell (routing, providers, entry point)
-├── features/      ← User-facing capabilities (one folder per feature)
-└── shared/        ← Code used by 2+ features (components, config, utils)
-```
+Uses the 3-bucket pattern from `cosmo-instructions/architecture.md` (`src/app/`, `src/features/`, `src/shared/`).
 
 File naming: `kebab-case` for files, `PascalCase` for React component exports.
 

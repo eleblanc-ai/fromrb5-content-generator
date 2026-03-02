@@ -57,9 +57,10 @@ You can have natural conversations during any phase:
 - **Automatically (no user action needed):**
   - Plan approved → entering Phase 3: write `## Phase 3: Implement\n\nImplementing slice N: [name], plan approved.` to `current-phase.md`
   - Verification passes → entering Phase 4: update `current-phase.md` to `## Phase 4: Approval\n\nSlice N implemented, awaiting approval.`
-- User says "pause", "stop", "save progress", or similar
-- Taking a break or ending a session mid-phase
-- Before a long tangent that might lose context
+- **When user says "pause", "stop", "save progress", or similar:**
+  1. Write the full current phase context to `.state/current-phase.md` using the State Template from `cosmo-instructions/templates.md` — fill in every field for the current phase
+  2. Confirm to the user: "Saved. Resume anytime with 'start cosmo'."
+  3. Stop — do not continue work
 
 ### When to Clear State
 - Slice approved in Phase 4 (after writing slice file and test report)
@@ -347,12 +348,7 @@ Before coding, you MUST read:
 
 ### Architecture Compliance
 
-**Read `cosmo-instructions/architecture.md` for complete guidelines.**
-
-Key points:
-- **File placement**: Features vs shared vs app buckets (no new top-level buckets)
-- **Import boundaries**: ❌ No feature-to-feature imports
-- **Avoid premature abstraction**: Only create shared code when used by 2+ features
+**Follow all rules in `cosmo-instructions/architecture.md`.**
 
 ### Testing Requirements
 You MUST:
@@ -360,7 +356,6 @@ You MUST:
 - **Ensure regression safety** for existing behavior
 - **Never remove tests** unless explicitly part of the approved plan
 - Tests should match the existing test patterns in the codebase
-- **If no tests exist yet** (first slice): Set up testing infrastructure per spec.md and add basic tests
 
 ### Test Planning Strategy
 
@@ -417,16 +412,7 @@ Write tests that cover:
 - **Complete workflows** (especially for persistence, external integrations, multi-step processes)
 
 ### Code Quality Rules
-- **Functions**: ≤ 50 lines, cyclomatic complexity ≤ 8, ≤ 5 positional params
-- **Lines**: 100-char max (or project standard), no relative `..` imports
-- **Naming**: Clear, descriptive names that reduce need for comments
-- **Imports**: Only what you need, no unused exports or dead code
-- **Style**: Consistent with codebase
-- **Error handling**: Fail fast with clear messages, never swallow exceptions silently
-- **Type checking**: All code must pass static type checks (if language supports it)
-- **Doc comments**: On non-trivial public APIs (use project style guide)
-- **Comments**: Only where logic isn't self-evident (no obvious, repeated, or commented-out code)
-- **Configuration**: In proper location per `architecture.md`, no hardcoded paths
+See **Code Organization Within Files** and **Definition of Done** in `cosmo-instructions/architecture.md`.
 
 ### Additional Standards
 
@@ -443,15 +429,8 @@ Write tests that cover:
 ### Completion Criteria
 The slice is complete ONLY when ALL of these are true:
 - ✓ Implementation matches the approved plan
-- ✓ Verification command passes (all checks: type-check, lint, tests)
-- ✓ All tests pass (existing + new)
-- ✓ **Tests exist for all new functionality** (no untested code)
-- ✓ Diff is minimal and scoped to the slice
-- ✓ **No existing functionality outside the slice scope was removed or broken**
-- ✓ Architecture boundaries respected
-- ✓ No unused imports, exports, or dead code introduced by this slice
-- ✓ Documentation updated where required
-- ✓ Codebase remains architecturally consistent
+- ✓ No existing functionality outside the slice scope was removed or broken
+- ✓ All items in the **Definition of Done** (`cosmo-instructions/architecture.md`) pass
 
 **If any criterion fails, the slice is not complete.**
 
