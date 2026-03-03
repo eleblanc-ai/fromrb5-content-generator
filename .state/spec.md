@@ -1,18 +1,19 @@
 # Product Spec
 
 **Created:** 2026-02-22
-**Last Updated:** 2026-03-01
-**Status:** Approved
+**Last Updated:** 2026-03-03
+**Status:** Approved (V2 revision)
 
 ## Overview
 
-A flyer creation studio for a tea business that outputs **actual final flyer assets** (not just copy guidance) for social formats. The app generates and edits flyer variants for Instagram Post and Instagram Story, supports two rendering modes (AI fully composed or programmatic text overlay), and saves all outputs/metadata in Supabase.
+A flyer creation studio for a tea business that outputs **actual final flyer assets** (not just copy guidance) for social formats. The app generates and edits flyer variants for Instagram Post and Instagram Story, supports two rendering modes (AI fully composed or programmatic text overlay), organises work into **isolated per-flyer threads** (ChatGPT/Claude style), and persists a **brand kit** that auto-applies to every generation.
 
 ## Goals
 
 - Produce publish-ready flyer creatives quickly for Instagram Post and Story
-- Generate multiple variant options per brief and enable quick refinement loops
-- Preserve all briefs, variants, and exports in history for reuse and iteration
+- Collect all refinement work for a single flyer into one isolated thread (not a flat history list)
+- Enable true back-and-forth conversational refinement within each thread
+- Apply consistent brand identity (colors, logo, fonts, name/tagline) to every generated flyer automatically
 
 ## Target Users
 
@@ -21,23 +22,35 @@ A flyer creation studio for a tea business that outputs **actual final flyer ass
 ## Core Features
 
 1. **Flyer brief form (full brief, required)**
-  - Inputs include campaign goal, product/tea name, key details, CTA, brand style controls (tone/color/font vibe), and format constraints
-2. **Supported formats (V1)**
-  - Instagram Post (square)
-  - Instagram Story (vertical)
-3. **Two flyer rendering modes (V1)**
-  - **Mode A:** AI-generated final flyer image (text baked into the generated image)
-  - **Mode B:** AI background generation + programmatic text overlay to render final flyer deterministically
+  - Inputs: campaign goal, product/tea name, key details, CTA, brand style controls (tone/color/font vibe), format constraints
+2. **Supported formats**
+  - Instagram Post (square 1080×1080)
+  - Instagram Story (vertical 1080×1920)
+3. **Two flyer rendering modes**
+  - **Mode A:** AI-generated final flyer image (text baked into generated image)
+  - **Mode B:** AI background generation + programmatic text overlay (Canvas 2D, deterministic)
 4. **Variant generation and refinement**
-  - Generate 3 variants per format
+  - 3 variants per format, per generation turn
   - Quick regenerate for a selected variant
-  - Editable text fields (headline/body/CTA etc.) + re-render final flyer
+  - Editable copy fields (headline/tagline/body/CTA) + re-render final flyer
 5. **Output and export**
-  - Download PNG and JPG
-  - Export package (zip of generated variants)
-6. **History and persistence**
-  - Save briefs, variant outputs, selected mode, format, and metadata in Supabase
-  - Keep lineage for regenerated/edited variants
+  - Download PNG per variant
+  - Export package (zip of all variants)
+6. **Thread-based navigation (V2)**
+  - Each flyer brief creates an isolated thread
+  - ChatGPT/Claude-style sidebar lists all threads by title + date
+  - Selecting a thread shows its full history in the main panel
+  - New thread button starts a fresh brief
+7. **Conversational refinement within threads (V2)**
+  - Chat input in thread detail view
+  - User messages ("make it more minimal") → `generate-flyer` called with thread history as context → new flyer variants appended to thread
+  - Both user message and assistant response (new flyer) stored as `messages` rows
+8. **Brand kit (V2)**
+  - Brand settings panel (accessible from header)
+  - Settings: brand name, brand tagline, color palette (up to 5 hex values), font preference, logo upload
+  - Persisted in `brand_settings` Supabase table
+  - Auto-injected into every `generate-flyer` call (Claude prompt + Gemini visual prompt)
+  - Logo overlaid onto Mode B canvas output (bottom-right corner)
 
 ## Constraints
 
@@ -53,13 +66,13 @@ A flyer creation studio for a tea business that outputs **actual final flyer ass
 - **Language:** TypeScript (frontend); TypeScript/Deno (Edge Functions)
 - **Framework:** React + Vite
 - **Styling:** Tailwind CSS
-- **Database/Storage:** Supabase (Postgres for briefs/variants metadata, Storage for flyer image assets and zip exports)
+- **Database/Storage:** Supabase (Postgres for briefs/variants metadata, Storage for flyer image assets, logo, and zip exports)
 - **AI:**
   - Text generation: Anthropic Claude (`claude-sonnet-4-5`) for structured flyer copy variants
   - Image generation: Google Gemini (`gemini-3-pro-image-preview`) for flyer background or fully composed flyers
 - **Rendering:**
   - Mode A: image model returns final composed flyer
-  - Mode B: app/service applies deterministic text overlay on generated background using format-specific layout templates
+  - Mode B: app applies deterministic text overlay on generated background using format-specific layout templates; logo drawn via Canvas 2D
 - **API layer:** Supabase Edge Functions in `supabase/functions/`
 - **Project structure:** Feature-based, per `cosmo-instructions/architecture.md`
 - **Verification command:** `npm run verify`
@@ -67,17 +80,37 @@ A flyer creation studio for a tea business that outputs **actual final flyer ass
 
 ## Data Model
 
-### `content_items` table (existing; reused/extended)
+### `content_items` (existing)
 - `id` — uuid, primary key
-- `type` — enum (currently includes `image`; flyer variants stored as image entries with metadata)
-- `prompt` — text (brief or generation prompt)
-- `text_output` — text (nullable; copy guidance / serialized copy blocks)
+- `type` — enum (tea_writeup | image | flyer_text)
+- `prompt` — text
+- `text_output` — text (nullable; serialized copy blocks + flyer metadata)
 - `image_url` — text (nullable; flyer asset URL)
 - `parent_id` — uuid (nullable; lineage for regenerate/edit)
 - `created_at` — timestamp
 
-### Metadata requirement (to capture in implementation)
-- Store format (`instagram_post` | `instagram_story`), render mode (`ai_composed` | `overlay`), and variant index for each output
+### `threads` (V2)
+- `id` — uuid, primary key
+- `title` — text (first few words of brief prompt)
+- `format` — text (instagram_post | instagram_story)
+- `render_mode` — text (ai_composed | overlay)
+- `created_at` — timestamp
+
+### `messages` (V2)
+- `id` — uuid, primary key
+- `thread_id` — uuid FK → threads
+- `role` — text (user | assistant)
+- `content` — text (user prompt text or assistant status message)
+- `flyer_item_id` — uuid FK → content_items (nullable; links to the flyer row for assistant turns)
+- `created_at` — timestamp
+
+### `brand_settings` (V2, singleton)
+- `id` — uuid, primary key
+- `brand_name` — text
+- `brand_tagline` — text
+- `color_palette` — text[] (hex values, up to 5)
+- `font_preference` — text
+- `logo_url` — text (nullable; Supabase Storage URL)
 
 ## Style
 

@@ -137,3 +137,18 @@ Mode B generates text-free backgrounds via Gemini and composites the copy fields
 | 39 | `src/app/App.test.tsx` | removes deleted item from history when onDeleted fires | ✅ Pass | Item removed from history list on delete callback |
 
 ---
+
+## Slice 12: Thread UI Skeleton
+
+Replaced flat history list with a ChatGPT/Claude-style thread sidebar. Each brief creates a thread row + user/assistant messages in the DB. Two-column layout: ThreadSidebar + main panel (GenerateForm or ThreadView). Selecting a thread loads its latest flyer via content_items query.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| 40 | `src/app/App.test.tsx` | renders the app shell with header and sidebar | ✅ Pass | "Content Studio" heading + Flyer threads nav present |
+| 41 | `src/app/App.test.tsx` | shows generate form when there are no threads | ✅ Pass | New-thread view rendered when thread list empty |
+| 42 | `src/app/App.test.tsx` | loads threads on mount and shows them in sidebar | ✅ Pass | Threads fetched from Supabase; rendered in sidebar |
+| 43 | `src/app/App.test.tsx` | shows generate form when new flyer button is clicked | ✅ Pass | handleNewThread switches back to new-thread view |
+| 44 | `src/app/App.test.tsx` | adds a new thread to the sidebar and shows thread view when generation completes | ✅ Pass | onResult prepends new thread to sidebar; ThreadView shown |
+| 45 | `src/app/App.test.tsx` | removes thread from sidebar when onThreadDeleted fires | ✅ Pass | handleThreadDeleted removes thread; generate form shown |
+
+---

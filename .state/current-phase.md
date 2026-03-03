@@ -1,17 +1,12 @@
-## Phase 1: Interview
+## Phase 4: Approval
 
-Slice 11 approved and shipped. Returning to interview to revise scope.
+Slice 12 (Thread UI skeleton) complete. Ready for user review.
 
-All V1 spec features are complete:
-- Flyer brief form
-- Instagram Post + Story formats
-- Mode A (AI composed)
-- Mode B (Canvas text overlay)
-- 3 variants per brief
-- Variant selection + regenerate
-- Editable copy fields + re-render
-- Download PNG + zip export
-- History + lineage persistence
-- Delete history items
+**What shipped:**
+- Two-column thread layout (ThreadSidebar + main panel)
+- `threads` + `messages` + `brand_settings` DB tables
+- Brief submission creates thread + messages in DB
+- Sidebar lists all threads; selecting a thread loads its latest flyer
+- 34 tests passing
 
-**Next:** Scope revision interview with user.
+**Next:** Slice 13 — Chat per thread (chat input in ThreadView, conversational refinement)

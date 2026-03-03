@@ -46,6 +46,32 @@ export interface ContentItem {
   created_at: string
 }
 
+export interface Thread {
+  id: string
+  title: string
+  format: FlyerFormat
+  render_mode: FlyerRenderMode
+  created_at: string
+}
+
+export interface Message {
+  id: string
+  thread_id: string
+  role: 'user' | 'assistant'
+  content: string
+  flyer_item_id: string | null
+  created_at: string
+}
+
+export interface BrandSettings {
+  id: string
+  brand_name: string
+  brand_tagline: string
+  color_palette: string[]
+  font_preference: string
+  logo_url: string | null
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -53,8 +79,29 @@ export interface Database {
         Row: ContentItem
         Insert: Omit<ContentItem, 'id' | 'created_at'>
         Update: Partial<Omit<ContentItem, 'id' | 'created_at'>>
+        Relationships: []
+      }
+      threads: {
+        Row: Thread
+        Insert: Omit<Thread, 'id' | 'created_at'>
+        Update: Partial<Omit<Thread, 'id' | 'created_at'>>
+        Relationships: []
+      }
+      messages: {
+        Row: Message
+        Insert: Omit<Message, 'id' | 'created_at'>
+        Update: Partial<Omit<Message, 'id' | 'created_at'>>
+        Relationships: []
+      }
+      brand_settings: {
+        Row: BrandSettings
+        Insert: Omit<BrandSettings, 'id'>
+        Update: Partial<Omit<BrandSettings, 'id'>>
+        Relationships: []
       }
     }
+    Views: Record<string, never>
+    Functions: Record<string, never>
     Enums: {
       content_type: ContentType
     }

@@ -5,6 +5,7 @@ import type {
   FlyerFormat,
   FlyerGenerationRequest,
   FlyerRenderMode,
+  Thread,
 } from '../../shared/config/supabase'
 
 const FLYER_FORMAT_LABELS: Record<FlyerFormat, string> = {
@@ -40,7 +41,7 @@ const INITIAL_FORM_VALUES: FlyerBriefFormValues = {
 }
 
 interface Props {
-  onResult: (item: ContentItem) => void
+  onResult: (thread: Thread, item: ContentItem) => void
 }
 
 interface VariantPayload {
@@ -117,6 +118,24 @@ export default function GenerateForm({ onResult }: Props) {
     setLoading(true)
     setError(null)
 
+    // Create thread row first
+    // Note: supabase-js 2.49+ requires generated schema types for inference; use cast for manually-typed tables
+    const threadTitle = formValues.campaignGoal.slice(0, 60) || 'Untitled flyer'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: threadData, error: threadError } = (await (supabase as any)
+      .from('threads')
+      .insert({ title: threadTitle, format, render_mode: renderMode })
+      .select()
+      .single()) as { data: Thread | null; error: { message: string } | null }
+
+    if (threadError || !threadData) {
+      setError(threadError?.message ?? 'Failed to create thread')
+      setLoading(false)
+      return
+    }
+
+    const thread: Thread = threadData
+
     const requestBody: FlyerGenerationRequest = {
       type: 'flyer_text',
       prompt: toPrompt(formValues, format),
@@ -146,7 +165,25 @@ export default function GenerateForm({ onResult }: Props) {
     }
 
     const response = data as FlyerInvokeResponse
-    onResult(mergeFlyerMetadata(response.item, response.variants))
+    const mergedItem = mergeFlyerMetadata(response.item, response.variants)
+
+    // Persist initial messages for thread history
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from('messages').insert({
+      thread_id: thread.id,
+      role: 'user',
+      content: requestBody.prompt,
+      flyer_item_id: null,
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from('messages').insert({
+      thread_id: thread.id,
+      role: 'assistant',
+      content: 'Generated flyer',
+      flyer_item_id: mergedItem.id,
+    })
+
+    onResult(thread, mergedItem)
     setFormValues(INITIAL_FORM_VALUES)
   }
 

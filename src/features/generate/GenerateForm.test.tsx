@@ -2,13 +2,41 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import GenerateForm from './GenerateForm'
+import type { Thread } from '../../shared/config/supabase'
 
 const mockInvoke = vi.hoisted(() => vi.fn())
+const mockThreadSingle = vi.hoisted(() => vi.fn())
+const mockMessageInsert = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({ data: null, error: null }),
+)
+
+const mockThread: Thread = {
+  id: 'thread-123',
+  title: 'Drive weekend tea tasting signups',
+  format: 'instagram_story',
+  render_mode: 'overlay',
+  created_at: '2026-03-03T00:00:00Z',
+}
 
 vi.mock('../../shared/config/supabase', () => ({
   supabase: {
     functions: {
       invoke: mockInvoke,
+    },
+    from: (table: string) => {
+      if (table === 'threads') {
+        return {
+          insert: () => ({
+            select: () => ({
+              single: mockThreadSingle,
+            }),
+          }),
+        }
+      }
+      if (table === 'messages') {
+        return { insert: mockMessageInsert }
+      }
+      return {}
     },
   },
 }))
@@ -65,6 +93,10 @@ async function fillRequiredFields() {
 describe('GenerateForm', () => {
   beforeEach(() => {
     mockInvoke.mockReset()
+    mockThreadSingle.mockReset()
+    mockMessageInsert.mockReset()
+    mockMessageInsert.mockResolvedValue({ data: null, error: null })
+    mockThreadSingle.mockResolvedValue({ data: mockThread, error: null })
   })
 
   it('renders flyer brief fields, selectors, and submit button', () => {
@@ -95,7 +127,7 @@ describe('GenerateForm', () => {
     expect(screen.getByRole('button', { name: 'Generate flyer brief' })).toBeDisabled()
   })
 
-  it('submits flyer payload and fires onResult', async () => {
+  it('submits flyer payload and fires onResult with thread and item', async () => {
     mockInvoke.mockResolvedValue({
       data: {
         item: mockTextItem,
@@ -144,16 +176,14 @@ describe('GenerateForm', () => {
           },
         },
       })
+      // onResult called with (thread, item)
       expect(onResult).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: '123',
-          type: 'flyer_text',
-          prompt: 'Campaign goal: Drive weekend tea tasting signups',
-        }),
+        expect.objectContaining({ id: 'thread-123' }),
+        expect.objectContaining({ id: '123', type: 'flyer_text' }),
       )
     })
 
-    const submittedItem = onResult.mock.calls[0][0] as { text_output: string }
+    const submittedItem = onResult.mock.calls[0][1] as { text_output: string }
     const parsed = JSON.parse(submittedItem.text_output)
     expect(parsed.variants).toHaveLength(3)
     expect(parsed.variants[1].id).toBe('v2')
