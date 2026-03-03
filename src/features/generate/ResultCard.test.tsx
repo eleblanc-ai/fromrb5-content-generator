@@ -57,8 +57,6 @@ const mockFlyerImageItem: ContentItem = {
     },
     variants: [
       { id: 'v1', prompt: 'Variant 1', image_url: 'https://example.com/flyer-v1.png' },
-      { id: 'v2', prompt: 'Variant 2', image_url: 'https://example.com/flyer-v2.png' },
-      { id: 'v3', prompt: 'Variant 3', image_url: 'https://example.com/flyer-v3.png' },
     ],
     copy: {
       headline: 'Sip the Reserve',
@@ -91,8 +89,6 @@ const mockFlyerOverlayItem: ContentItem = {
     },
     variants: [
       { id: 'ov1', prompt: 'Overlay Variant 1', image_url: 'https://example.com/bg-v1.png' },
-      { id: 'ov2', prompt: 'Overlay Variant 2', image_url: 'https://example.com/bg-v2.png' },
-      { id: 'ov3', prompt: 'Overlay Variant 3', image_url: 'https://example.com/bg-v3.png' },
     ],
     copy: {
       headline: 'Sip the Reserve',
@@ -239,17 +235,6 @@ describe('ResultCard', () => {
     })
   })
 
-  it('switches flyer preview when selecting a variant', async () => {
-    render(<ResultCard item={mockFlyerImageItem} />)
-
-    const previewImage = screen.getByRole('img', { name: 'Weekend tea event flyer' })
-    expect(previewImage).toHaveAttribute('src', 'https://example.com/flyer-v1.png')
-
-    await userEvent.click(screen.getByRole('button', { name: 'Select variant 2' }))
-
-    expect(previewImage).toHaveAttribute('src', 'https://example.com/flyer-v2.png')
-  })
-
   it('regenerates using selected flyer variant context', async () => {
     const regeneratedItem: ContentItem = {
       id: 'new-item',
@@ -266,8 +251,6 @@ describe('ResultCard', () => {
         item: regeneratedItem,
         variants: [
           { id: 'nv1', prompt: 'New Variant 1', image_url: 'https://example.com/nv1.png' },
-          { id: 'nv2', prompt: 'New Variant 2', image_url: 'https://example.com/nv2.png' },
-          { id: 'nv3', prompt: 'New Variant 3', image_url: 'https://example.com/nv3.png' },
         ],
       },
       error: null,
@@ -276,7 +259,6 @@ describe('ResultCard', () => {
     const onIterated = vi.fn()
     render(<ResultCard item={mockFlyerImageItem} onIterated={onIterated} />)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Select variant 3' }))
     await userEvent.click(screen.getByRole('button', { name: 'Regenerate selected variant' }))
 
     await waitFor(() => {
@@ -296,56 +278,17 @@ describe('ResultCard', () => {
             format: 'instagram_post',
             renderMode: 'ai_composed',
           },
-          parentId: 'v3',
-          sourceImageUrl: 'https://example.com/flyer-v3.png',
+          parentId: 'v1',
+          sourceImageUrl: 'https://example.com/flyer-v1.png',
         },
       })
       expect(onIterated).toHaveBeenCalled()
     })
   })
 
-  it('renders download all variants button for multi-variant flyer cards', () => {
-    render(<ResultCard item={mockFlyerImageItem} />)
-    expect(screen.getByRole('button', { name: 'Download all variants' })).toBeInTheDocument()
-  })
-
-  it('does not render download all variants button for single-image items', () => {
+  it('does not render a download all variants button', () => {
     render(<ResultCard item={mockImageItem} />)
     expect(screen.queryByRole('button', { name: 'Download all variants' })).toBeNull()
-  })
-
-  it('fetches all variants and triggers zip download on download all click', async () => {
-    const fakeBlob = new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' })
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      blob: () => Promise.resolve(fakeBlob),
-    } as unknown as Response)
-
-    const createObjectURL = vi.fn().mockReturnValue('blob:fake-zip-url')
-    const revokeObjectURL = vi.fn()
-    Object.defineProperty(URL, 'createObjectURL', { value: createObjectURL, configurable: true })
-    Object.defineProperty(URL, 'revokeObjectURL', { value: revokeObjectURL, configurable: true })
-
-    const originalCreateElement = document.createElement.bind(document)
-    const anchor = originalCreateElement('a')
-    const clickSpy = vi.spyOn(anchor, 'click').mockImplementation(() => {})
-    vi.spyOn(document, 'createElement').mockImplementation(((tagName: string) => {
-      if (tagName.toLowerCase() === 'a') return anchor
-      return originalCreateElement(tagName)
-    }) as typeof document.createElement)
-
-    render(<ResultCard item={mockFlyerImageItem} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Download all variants' }))
-
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(3)
-      expect(global.fetch).toHaveBeenCalledWith('https://example.com/flyer-v1.png')
-      expect(global.fetch).toHaveBeenCalledWith('https://example.com/flyer-v2.png')
-      expect(global.fetch).toHaveBeenCalledWith('https://example.com/flyer-v3.png')
-      expect(createObjectURL).toHaveBeenCalled()
-      expect(anchor.download).toContain('.zip')
-      expect(clickSpy).toHaveBeenCalledTimes(1)
-    })
   })
 
   it('renders editable copy fields for flyer cards with copy block', () => {
@@ -420,7 +363,7 @@ describe('ResultCard', () => {
       expect(mockDelete).toHaveBeenCalled()
       expect(mockDeleteIn).toHaveBeenCalledWith(
         'id',
-        expect.arrayContaining(['999', 'v1', 'v2', 'v3']),
+        expect.arrayContaining(['999', 'v1']),
       )
       expect(onDeleted).toHaveBeenCalled()
     })
@@ -441,6 +384,6 @@ describe('ResultCard', () => {
   it('renders canvas elements for overlay-mode flyer cards', () => {
     render(<ResultCard item={mockFlyerOverlayItem} />)
     const canvases = document.querySelectorAll('canvas')
-    expect(canvases.length).toBeGreaterThanOrEqual(3)
+    expect(canvases.length).toBeGreaterThanOrEqual(1)
   })
 })

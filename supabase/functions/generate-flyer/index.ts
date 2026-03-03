@@ -132,13 +132,6 @@ function buildFlyerImagePrompt(flyer: FlyerBrief, copy: FlyerCopyBlock) {
   ].join('\n')
 }
 
-function buildVariantPrompt(flyer: FlyerBrief, copy: FlyerCopyBlock, variantIndex: number) {
-  return [
-    buildFlyerImagePrompt(flyer, copy),
-    `Create distinct creative direction variant ${variantIndex} of 3 while preserving the core campaign message.`,
-    'Vary composition, visual rhythm, and emphasis across variants.',
-  ].join('\n\n')
-}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -188,95 +181,81 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     )
 
-    const storedVariants: StoredVariant[] = []
+    const imagePrompt = buildFlyerImagePrompt(flyer, copy)
 
-    for (let index = 1; index <= 3; index += 1) {
-      const variantPrompt = buildVariantPrompt(flyer, copy, index)
+    const contents = sourceInlineData
+      ? [
+          {
+            role: 'user' as const,
+            parts: [
+              { text: imagePrompt },
+              { inlineData: sourceInlineData },
+            ],
+          },
+        ]
+      : imagePrompt
 
-      const contents = sourceInlineData
-        ? [
-            {
-              role: 'user' as const,
-              parts: [
-                { text: variantPrompt },
-                {
-                  inlineData: sourceInlineData,
-                },
-              ],
-            },
-          ]
-        : variantPrompt
-
-      const response = await ai.models.generateContent({
-        model: GEMINI_IMAGE_MODEL,
-        contents,
-        config: {
-          responseModalities: ['IMAGE'],
-        },
-      })
-
-      const imagePart = response.candidates?.[0]?.content?.parts?.find((p) => p.inlineData)
-      if (!imagePart?.inlineData) {
-        throw new Error(`No flyer image returned from Gemini for variant ${index}`)
-      }
-
-      const { data: imageBase64, mimeType } = imagePart.inlineData
-      const extension = mimeType?.includes('jpeg') ? 'jpg' : 'png'
-      const filename = `flyer-${flyer.format}-v${index}-${crypto.randomUUID()}.${extension}`
-      const imageBytes = Uint8Array.from(atob(imageBase64 ?? ''), (c) => c.charCodeAt(0))
-
-      const { error: uploadError } = await supabase.storage
-        .from('content-images')
-        .upload(filename, imageBytes, { contentType: mimeType ?? 'image/png' })
-
-      if (uploadError) throw new Error(uploadError.message)
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from('content-images').getPublicUrl(filename)
-
-      const metadataText = JSON.stringify({
-        flyer,
-        variantIndex: index,
-        copy,
-      })
-
-      const { data, error } = await supabase
-        .from('content_items')
-        .insert({
-          type: 'flyer_text',
-          prompt,
-          text_output: metadataText,
-          image_url: publicUrl,
-          parent_id: parentId ?? null,
-        })
-        .select('id, prompt, image_url')
-        .single()
-
-      if (error) throw new Error(error.message)
-
-      storedVariants.push(data as StoredVariant)
-    }
-
-    const [primaryVariant] = storedVariants
-    const metadataText = JSON.stringify({
-      flyer,
-      variantIndex: 1,
-      variants: storedVariants,
-      copy,
+    const response = await ai.models.generateContent({
+      model: GEMINI_IMAGE_MODEL,
+      contents,
+      config: {
+        responseModalities: ['IMAGE'],
+      },
     })
 
+    const imagePart = response.candidates?.[0]?.content?.parts?.find((p) => p.inlineData)
+    if (!imagePart?.inlineData) {
+      throw new Error('No flyer image returned from Gemini')
+    }
+
+    const { data: imageBase64, mimeType } = imagePart.inlineData
+    const extension = mimeType?.includes('jpeg') ? 'jpg' : 'png'
+    const filename = `flyer-${flyer.format}-${crypto.randomUUID()}.${extension}`
+    const imageBytes = Uint8Array.from(atob(imageBase64 ?? ''), (c) => c.charCodeAt(0))
+
+    const { error: uploadError } = await supabase.storage
+      .from('content-images')
+      .upload(filename, imageBytes, { contentType: mimeType ?? 'image/png' })
+
+    if (uploadError) throw new Error(uploadError.message)
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from('content-images').getPublicUrl(filename)
+
+    const metadataText = JSON.stringify({ flyer, copy })
+
+    const { data, error } = await supabase
+      .from('content_items')
+      .insert({
+        type: 'flyer_text',
+        prompt,
+        text_output: metadataText,
+        image_url: publicUrl,
+        parent_id: parentId ?? null,
+      })
+      .select('id, prompt, image_url')
+      .single()
+
+    if (error) throw new Error(error.message)
+
+    const storedVariant = data as StoredVariant
+
     const primaryItem = {
-      id: primaryVariant.id,
+      id: storedVariant.id,
       type: 'flyer_text',
       prompt,
-      text_output: metadataText,
-      image_url: primaryVariant.image_url,
+      text_output: JSON.stringify({
+        flyer,
+        variants: [storedVariant],
+        copy,
+      }),
+      image_url: storedVariant.image_url,
       parent_id: parentId ?? null,
       created_at: new Date().toISOString(),
     }
 
-    return new Response(JSON.stringify({ item: primaryItem, variants: storedVariants }), {
+    return new Response(JSON.stringify({ item: primaryItem, variants: [storedVariant] }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (err) {

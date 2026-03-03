@@ -133,8 +133,6 @@ describe('GenerateForm', () => {
         item: mockTextItem,
         variants: [
           { id: 'v1', prompt: 'Variant 1', image_url: 'https://example.com/v1.png' },
-          { id: 'v2', prompt: 'Variant 2', image_url: 'https://example.com/v2.png' },
-          { id: 'v3', prompt: 'Variant 3', image_url: 'https://example.com/v3.png' },
         ],
       },
       error: null,
@@ -185,8 +183,8 @@ describe('GenerateForm', () => {
 
     const submittedItem = onResult.mock.calls[0][1] as { text_output: string }
     const parsed = JSON.parse(submittedItem.text_output)
-    expect(parsed.variants).toHaveLength(3)
-    expect(parsed.variants[1].id).toBe('v2')
+    expect(parsed.variants).toHaveLength(1)
+    expect(parsed.variants[0].id).toBe('v1')
   })
 
   it('shows error message on failure', async () => {
