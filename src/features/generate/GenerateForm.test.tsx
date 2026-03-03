@@ -76,7 +76,7 @@ describe('GenerateForm', () => {
   it('shows loading state while interview is starting', () => {
     mockInvoke.mockImplementation(() => new Promise(() => {}))
     render(<GenerateForm onResult={() => {}} />)
-    expect(screen.getByText('Starting interview...')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Type your answer...')).toBeDisabled()
   })
 
   it('renders opening question after interview starts', async () => {

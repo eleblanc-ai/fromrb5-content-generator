@@ -9,6 +9,9 @@ import type {
   Thread,
 } from '../../shared/config/supabase'
 
+// Instant in tests so animation doesn't block waitFor assertions
+const TYPEWRITER_MS = import.meta.env.MODE === 'test' ? 0 : 18
+
 interface DisplayMessage {
   role: 'assistant' | 'user'
   text: string
@@ -74,6 +77,20 @@ function toPrompt(brief: FlyerBrief): string {
   ].join('\n')
 }
 
+function TypingDots() {
+  return (
+    <div className="flex justify-start">
+      <div className="bg-surface border border-border rounded-2xl rounded-bl-sm px-4 py-3">
+        <span className="flex gap-1 items-center">
+          <span className="w-1.5 h-1.5 bg-ink-muted rounded-full animate-bounce [animation-delay:-0.3s]" />
+          <span className="w-1.5 h-1.5 bg-ink-muted rounded-full animate-bounce [animation-delay:-0.15s]" />
+          <span className="w-1.5 h-1.5 bg-ink-muted rounded-full animate-bounce" />
+        </span>
+      </div>
+    </div>
+  )
+}
+
 interface Props {
   onResult: (thread: Thread, item: ContentItem) => void
 }
@@ -83,10 +100,18 @@ export default function GenerateForm({ onResult }: Props) {
   const [history, setHistory] = useState<HistoryMessage[]>([])
   const [currentInput, setCurrentInput] = useState('')
   const [interviewLoading, setInterviewLoading] = useState(true)
+  const [streamingMessage, setStreamingMessage] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const mountedRef = useRef(false)
+  const typewriterRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (typewriterRef.current) clearInterval(typewriterRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     if (mountedRef.current) return
@@ -110,10 +135,9 @@ export default function GenerateForm({ onResult }: Props) {
         return
       }
 
-      const response = body
-      setMessages([{ role: 'assistant', text: response.message }])
-      setHistory([{ role: 'assistant', content: response.message }])
+      setHistory([{ role: 'assistant', content: body.message }])
       setInterviewLoading(false)
+      startTypewriter(body.message)
     }
 
     startInterview()
@@ -123,7 +147,30 @@ export default function GenerateForm({ onResult }: Props) {
     if (typeof bottomRef.current?.scrollIntoView === 'function') {
       bottomRef.current.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages])
+  }, [messages, streamingMessage, interviewLoading])
+
+  function startTypewriter(text: string) {
+    if (TYPEWRITER_MS === 0) {
+      setMessages((prev) => [...prev, { role: 'assistant', text }])
+      return
+    }
+
+    let i = 0
+    setStreamingMessage('')
+
+    if (typewriterRef.current) clearInterval(typewriterRef.current)
+
+    typewriterRef.current = setInterval(() => {
+      i += 1
+      setStreamingMessage(text.slice(0, i))
+      if (i >= text.length) {
+        clearInterval(typewriterRef.current!)
+        typewriterRef.current = null
+        setMessages((prev) => [...prev, { role: 'assistant', text }])
+        setStreamingMessage(null)
+      }
+    }, TYPEWRITER_MS)
+  }
 
   async function triggerGeneration(brief: FlyerBrief) {
     setGenerating(true)
@@ -190,7 +237,7 @@ export default function GenerateForm({ onResult }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const text = currentInput.trim()
-    if (!text || interviewLoading || generating) return
+    if (!text || interviewLoading || streamingMessage !== null || generating) return
 
     const newUserMessage: DisplayMessage = { role: 'user', text }
     const newMessages = [...messages, newUserMessage]
@@ -218,18 +265,17 @@ export default function GenerateForm({ onResult }: Props) {
       return
     }
 
-    const response = body
-    const assistantHistory: HistoryMessage = { role: 'assistant', content: response.message }
+    const assistantHistory: HistoryMessage = { role: 'assistant', content: body.message }
     setHistory([...updatedHistory, assistantHistory])
-    setMessages([...newMessages, { role: 'assistant', text: response.message }])
     setInterviewLoading(false)
+    startTypewriter(body.message)
 
-    if (response.complete && response.brief) {
-      triggerGeneration(response.brief)
+    if (body.complete && body.brief) {
+      triggerGeneration(body.brief)
     }
   }
 
-  const isDisabled = interviewLoading || generating
+  const isDisabled = interviewLoading || streamingMessage !== null || generating
 
   return (
     <div className="space-y-4">
@@ -250,6 +296,18 @@ export default function GenerateForm({ onResult }: Props) {
             </div>
           </div>
         ))}
+
+        {interviewLoading && <TypingDots />}
+
+        {streamingMessage !== null && (
+          <div className="flex justify-start">
+            <div className="max-w-xs sm:max-w-sm rounded-2xl px-4 py-2.5 text-sm leading-relaxed bg-surface text-ink border border-border rounded-bl-sm">
+              {streamingMessage}
+              <span className="inline-block w-px h-3.5 bg-ink-muted ml-0.5 animate-pulse" />
+            </div>
+          </div>
+        )}
+
         <div ref={bottomRef} />
       </div>
 
@@ -257,8 +315,6 @@ export default function GenerateForm({ onResult }: Props) {
 
       {generating ? (
         <p className="text-sm text-ink-muted text-center py-2">Generating your flyer...</p>
-      ) : interviewLoading && messages.length === 0 ? (
-        <p className="text-sm text-ink-muted text-center py-2">Starting interview...</p>
       ) : (
         <form onSubmit={handleSubmit} className="flex gap-2">
           <input
