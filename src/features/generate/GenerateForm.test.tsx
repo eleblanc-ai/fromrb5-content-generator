@@ -12,9 +12,9 @@ const mockMessageInsert = vi.hoisted(() =>
 
 const mockThread: Thread = {
   id: 'thread-123',
-  title: 'Drive weekend tea tasting signups',
-  format: 'instagram_story',
-  render_mode: 'overlay',
+  title: 'Boost weekend sales',
+  format: 'instagram_post',
+  render_mode: 'ai_composed',
   created_at: '2026-03-03T00:00:00Z',
 }
 
@@ -41,52 +41,30 @@ vi.mock('../../shared/config/supabase', () => ({
   },
 }))
 
-const mockTextItem = {
-  id: '123',
+const mockFlyerItem = {
+  id: 'item-1',
   type: 'flyer_text' as const,
-  prompt: 'Campaign goal: Drive weekend tea tasting signups',
-  text_output: JSON.stringify({
-    flyer: {
-      campaignGoal: 'Drive weekend tea tasting signups',
-      productName: 'Jasmine Green Reserve',
-      keyDetails: 'First flush jasmine pearls, floral aroma, small-batch packaging',
-      cta: 'Tap to order today',
-      tone: 'Premium and warm',
-      colorVibe: 'Lavender and charcoal',
-      fontVibe: 'Modern editorial sans',
-      formatConstraints: 'Keep safe margins for profile UI overlays',
-      format: 'instagram_story',
-      renderMode: 'overlay',
-    },
-    variantIndex: 1,
-  }),
-  image_url: null,
+  prompt: 'Campaign goal: Boost weekend sales',
+  text_output: JSON.stringify({ flyer: { format: 'instagram_post' } }),
+  image_url: 'https://example.com/flyer.png',
   parent_id: null,
-  created_at: '2026-02-22T00:00:00Z',
+  created_at: '2026-03-03T00:00:00Z',
 }
 
-async function fillRequiredFields() {
-  const fields: Array<{ placeholder: string; value: string }> = [
-    { placeholder: 'Drive weekend tea tasting signups', value: 'Drive weekend tea tasting signups' },
-    { placeholder: 'Jasmine Green Reserve', value: 'Jasmine Green Reserve' },
-    {
-      placeholder: 'First flush jasmine pearls, floral aroma, small-batch packaging',
-      value: 'First flush jasmine pearls, floral aroma, small-batch packaging',
-    },
-    { placeholder: 'Tap to order today', value: 'Tap to order today' },
-    { placeholder: 'Premium and warm', value: 'Premium and warm' },
-    { placeholder: 'Lavender and charcoal', value: 'Lavender and charcoal' },
-    { placeholder: 'Modern editorial sans', value: 'Modern editorial sans' },
-    {
-      placeholder: 'Keep safe margins for profile UI overlays',
-      value: 'Keep safe margins for profile UI overlays',
-    },
+async function answerAllTextQuestions() {
+  const answers = [
+    'Jasmine Green Reserve',
+    'Boost weekend sales',
+    'First flush, floral aroma',
+    'Order today',
+    'Premium and warm',
+    'Lavender and charcoal',
+    'Modern editorial sans',
+    'Keep safe margins',
   ]
-
-  for (const { placeholder, value } of fields) {
-    const element = screen.getByPlaceholderText(placeholder)
-    await userEvent.clear(element)
-    await userEvent.type(element, value)
+  for (const answer of answers) {
+    await userEvent.type(screen.getByPlaceholderText('Type your answer...'), answer)
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }))
   }
 }
 
@@ -99,100 +77,98 @@ describe('GenerateForm', () => {
     mockThreadSingle.mockResolvedValue({ data: mockThread, error: null })
   })
 
-  it('renders flyer brief fields, selectors, and submit button', () => {
+  it('renders the opening interview question', () => {
     render(<GenerateForm onResult={() => {}} />)
-    expect(screen.getByPlaceholderText('Drive weekend tea tasting signups')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Jasmine Green Reserve')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Tap to order today')).toBeInTheDocument()
-    expect(screen.getAllByRole('combobox')).toHaveLength(2)
-    expect(screen.getByRole('button', { name: 'Generate flyer brief' })).toBeInTheDocument()
+    expect(screen.getByText('What product are we making this flyer for?')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Type your answer...')).toBeInTheDocument()
   })
 
-  it('shows format and render mode options', () => {
+  it('advances to next question after user submits an answer', async () => {
     render(<GenerateForm onResult={() => {}} />)
-    expect(screen.getByRole('option', { name: 'Instagram Post' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Instagram Story' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'AI composed' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Overlay' })).toBeInTheDocument()
+
+    await userEvent.type(screen.getByPlaceholderText('Type your answer...'), 'Jasmine Green Reserve')
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(screen.getByText('Jasmine Green Reserve')).toBeInTheDocument()
+    expect(
+      screen.getByText("What's the campaign goal — what should this flyer achieve?"),
+    ).toBeInTheDocument()
   })
 
-  it('enables submit when form is pre-filled', () => {
+  it('shows format button choices after all text questions are answered', async () => {
     render(<GenerateForm onResult={() => {}} />)
-    expect(screen.getByRole('button', { name: 'Generate flyer brief' })).toBeEnabled()
+
+    await answerAllTextQuestions()
+
+    expect(screen.getByRole('button', { name: 'Instagram Post' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Instagram Story' })).toBeInTheDocument()
   })
 
-  it('disables submit when a required field is cleared', async () => {
+  it('shows render mode button choices after format is selected', async () => {
     render(<GenerateForm onResult={() => {}} />)
-    await userEvent.clear(screen.getByPlaceholderText('Drive weekend tea tasting signups'))
-    expect(screen.getByRole('button', { name: 'Generate flyer brief' })).toBeDisabled()
+
+    await answerAllTextQuestions()
+    await userEvent.click(screen.getByRole('button', { name: 'Instagram Post' }))
+
+    expect(screen.getByRole('button', { name: 'AI composed' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Overlay' })).toBeInTheDocument()
   })
 
-  it('submits flyer payload and fires onResult with thread and item', async () => {
+  it('auto-generates after render mode is selected and fires onResult', async () => {
     mockInvoke.mockResolvedValue({
       data: {
-        item: mockTextItem,
-        variants: [
-          { id: 'v1', prompt: 'Variant 1', image_url: 'https://example.com/v1.png' },
-        ],
+        item: mockFlyerItem,
+        variants: [{ id: 'v1', prompt: 'Variant', image_url: 'https://example.com/v1.png' }],
       },
       error: null,
     })
     const onResult = vi.fn()
     render(<GenerateForm onResult={onResult} />)
 
-    await fillRequiredFields()
-    await userEvent.selectOptions(screen.getAllByRole('combobox')[0], 'instagram_story')
-    await userEvent.selectOptions(screen.getAllByRole('combobox')[1], 'overlay')
-    await userEvent.click(screen.getByRole('button', { name: 'Generate flyer brief' }))
+    await answerAllTextQuestions()
+    await userEvent.click(screen.getByRole('button', { name: 'Instagram Post' }))
+    await userEvent.click(screen.getByRole('button', { name: 'AI composed' }))
 
     await waitFor(() => {
-      expect(mockInvoke).toHaveBeenCalledWith('generate-flyer', {
-        body: {
-          type: 'flyer_text',
-          prompt: [
-            'Campaign goal: Drive weekend tea tasting signups',
-            'Product name: Jasmine Green Reserve',
-            'Key details: First flush jasmine pearls, floral aroma, small-batch packaging',
-            'Call to action: Tap to order today',
-            'Tone: Premium and warm',
-            'Color vibe: Lavender and charcoal',
-            'Font vibe: Modern editorial sans',
-            'Format constraints: Keep safe margins for profile UI overlays',
-            'Target format: instagram_story',
-          ].join('\n'),
-          flyer: {
-            campaignGoal: 'Drive weekend tea tasting signups',
-            productName: 'Jasmine Green Reserve',
-            keyDetails: 'First flush jasmine pearls, floral aroma, small-batch packaging',
-            cta: 'Tap to order today',
-            tone: 'Premium and warm',
-            colorVibe: 'Lavender and charcoal',
-            fontVibe: 'Modern editorial sans',
-            formatConstraints: 'Keep safe margins for profile UI overlays',
-            format: 'instagram_story',
-            renderMode: 'overlay',
-          },
-        },
-      })
-      // onResult called with (thread, item)
+      expect(mockInvoke).toHaveBeenCalledWith(
+        'generate-flyer',
+        expect.objectContaining({
+          body: expect.objectContaining({
+            type: 'flyer_text',
+            flyer: expect.objectContaining({
+              productName: 'Jasmine Green Reserve',
+              campaignGoal: 'Boost weekend sales',
+              format: 'instagram_post',
+              renderMode: 'ai_composed',
+            }),
+          }),
+        }),
+      )
       expect(onResult).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'thread-123' }),
-        expect.objectContaining({ id: '123', type: 'flyer_text' }),
+        expect.objectContaining({ id: 'item-1' }),
       )
     })
-
-    const submittedItem = onResult.mock.calls[0][1] as { text_output: string }
-    const parsed = JSON.parse(submittedItem.text_output)
-    expect(parsed.variants).toHaveLength(1)
-    expect(parsed.variants[0].id).toBe('v1')
   })
 
-  it('shows error message on failure', async () => {
+  it('shows generating state while pending', async () => {
+    mockInvoke.mockImplementation(() => new Promise(() => {}))
+    render(<GenerateForm onResult={() => {}} />)
+
+    await answerAllTextQuestions()
+    await userEvent.click(screen.getByRole('button', { name: 'Instagram Post' }))
+    await userEvent.click(screen.getByRole('button', { name: 'AI composed' }))
+
+    expect(screen.getByText('Generating your flyer...')).toBeInTheDocument()
+  })
+
+  it('shows error message on generation failure', async () => {
     mockInvoke.mockResolvedValue({ data: null, error: { message: 'API call failed' } })
     render(<GenerateForm onResult={() => {}} />)
 
-    await fillRequiredFields()
-    await userEvent.click(screen.getByRole('button', { name: 'Generate flyer brief' }))
+    await answerAllTextQuestions()
+    await userEvent.click(screen.getByRole('button', { name: 'Instagram Post' }))
+    await userEvent.click(screen.getByRole('button', { name: 'AI composed' }))
 
     await waitFor(() => {
       expect(screen.getByText('API call failed')).toBeInTheDocument()
