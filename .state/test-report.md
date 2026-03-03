@@ -152,3 +152,18 @@ Replaced flat history list with a ChatGPT/Claude-style thread sidebar. Each brie
 | 45 | `src/app/App.test.tsx` | removes thread from sidebar when onThreadDeleted fires | ✅ Pass | handleThreadDeleted removes thread; generate form shown |
 
 ---
+
+## AI Interview + Typewriter
+
+Replaced the scripted 10-step flyer brief form with an AI-driven conversational interview. `interview-flyer` edge function calls Claude with a JSON-mode system prompt; `GenerateForm` drives the chat turn-by-turn and auto-generates on `complete: true`. Added client-side typewriter animation and typing dots.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| — | `src/features/generate/GenerateForm.test.tsx` | shows loading state while interview is starting | ✅ Pass | Input disabled while waiting for Claude's opening question |
+| — | `src/features/generate/GenerateForm.test.tsx` | renders opening question after interview starts | ✅ Pass | Claude's first message appears as an assistant bubble |
+| — | `src/features/generate/GenerateForm.test.tsx` | shows next question after user submits an answer | ✅ Pass | User bubble + Claude's follow-up both rendered |
+| — | `src/features/generate/GenerateForm.test.tsx` | auto-generates and fires onResult when interview completes | ✅ Pass | `complete: true` triggers generate-flyer and fires onResult |
+| — | `src/features/generate/GenerateForm.test.tsx` | shows generating state while flyer is being created | ✅ Pass | "Generating your flyer..." shown while function is pending |
+| — | `src/features/generate/GenerateForm.test.tsx` | shows error message when interview call fails | ✅ Pass | Application-level error from `data.error` displayed |
+
+---

@@ -67,13 +67,8 @@ Deno.serve(async (req) => {
     try {
       parsed = JSON.parse(json)
     } catch {
-      // Claude didn't return valid JSON — fall back to a safe opening question on first turn
-      const isFirstTurn = messages.length === 1 && (messages[0] as { content: string }).content === 'Start the interview.'
-      if (isFirstTurn) {
-        parsed = { message: 'What product are we making this flyer for?', complete: false }
-      } else {
-        throw new Error(`Claude returned non-JSON: ${text.slice(0, 300)}`)
-      }
+      // Claude didn't return valid JSON — wrap the raw text as a message and continue
+      parsed = { message: json || 'What product are we making this flyer for?', complete: false }
     }
 
     return new Response(JSON.stringify(parsed), {
