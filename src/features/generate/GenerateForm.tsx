@@ -2,26 +2,27 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../shared/config/supabase'
 import type {
   ContentItem,
-  FlyerFormat,
+  FlyerBrief,
   FlyerGenerationRequest,
+  FlyerFormat,
   FlyerRenderMode,
   Thread,
 } from '../../shared/config/supabase'
 
-interface FlyerBriefFormValues {
-  campaignGoal: string
-  productName: string
-  keyDetails: string
-  cta: string
-  tone: string
-  colorVibe: string
-  fontVibe: string
-  formatConstraints: string
-}
-
-interface InterviewMessage {
+interface DisplayMessage {
   role: 'assistant' | 'user'
   text: string
+}
+
+interface HistoryMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+interface InterviewResponse {
+  message: string
+  complete: boolean
+  brief?: FlyerBrief
 }
 
 interface VariantPayload {
@@ -34,38 +35,6 @@ interface FlyerInvokeResponse {
   item: ContentItem
   variants?: VariantPayload[]
 }
-
-type TextStepField = keyof FlyerBriefFormValues
-type ChoiceStepField = 'format' | 'renderMode'
-type StepField = TextStepField | ChoiceStepField
-
-interface Step {
-  field: StepField
-  question: string
-}
-
-const STEPS: Step[] = [
-  { field: 'productName', question: 'What product are we making this flyer for?' },
-  { field: 'campaignGoal', question: "What's the campaign goal — what should this flyer achieve?" },
-  { field: 'keyDetails', question: 'What key details should we highlight? (ingredients, USPs, availability, etc.)' },
-  { field: 'cta', question: "What's the call to action?" },
-  { field: 'tone', question: "What tone are you going for? (e.g. 'premium and warm', 'playful and bold')" },
-  { field: 'colorVibe', question: "What's your color vibe?" },
-  { field: 'fontVibe', question: "Any font preferences? (e.g. 'modern editorial sans', 'classic serif')" },
-  { field: 'formatConstraints', question: 'Any layout constraints to keep in mind?' },
-  { field: 'format', question: 'Which format?' },
-  { field: 'renderMode', question: 'How should the text be handled?' },
-]
-
-const FORMAT_OPTIONS: { value: FlyerFormat; label: string }[] = [
-  { value: 'instagram_post', label: 'Instagram Post' },
-  { value: 'instagram_story', label: 'Instagram Story' },
-]
-
-const RENDER_MODE_OPTIONS: { value: FlyerRenderMode; label: string }[] = [
-  { value: 'ai_composed', label: 'AI composed' },
-  { value: 'overlay', label: 'Overlay' },
-]
 
 function mergeFlyerMetadata(item: ContentItem, variants: VariantPayload[] | undefined) {
   if (item.type !== 'flyer_text' || !variants || variants.length === 0) {
@@ -91,17 +60,17 @@ function mergeFlyerMetadata(item: ContentItem, variants: VariantPayload[] | unde
   }
 }
 
-function toPrompt(values: FlyerBriefFormValues, format: FlyerFormat): string {
+function toPrompt(brief: FlyerBrief): string {
   return [
-    `Campaign goal: ${values.campaignGoal}`,
-    `Product name: ${values.productName}`,
-    `Key details: ${values.keyDetails}`,
-    `Call to action: ${values.cta}`,
-    `Tone: ${values.tone}`,
-    `Color vibe: ${values.colorVibe}`,
-    `Font vibe: ${values.fontVibe}`,
-    `Format constraints: ${values.formatConstraints}`,
-    `Target format: ${format}`,
+    `Campaign goal: ${brief.campaignGoal}`,
+    `Product name: ${brief.productName}`,
+    `Key details: ${brief.keyDetails}`,
+    `Call to action: ${brief.cta}`,
+    `Tone: ${brief.tone}`,
+    `Color vibe: ${brief.colorVibe}`,
+    `Font vibe: ${brief.fontVibe}`,
+    `Format constraints: ${brief.formatConstraints}`,
+    `Target format: ${brief.format}`,
   ].join('\n')
 }
 
@@ -110,15 +79,38 @@ interface Props {
 }
 
 export default function GenerateForm({ onResult }: Props) {
-  const [messages, setMessages] = useState<InterviewMessage[]>([
-    { role: 'assistant', text: STEPS[0].question },
-  ])
-  const [step, setStep] = useState(0)
+  const [messages, setMessages] = useState<DisplayMessage[]>([])
+  const [history, setHistory] = useState<HistoryMessage[]>([])
   const [currentInput, setCurrentInput] = useState('')
-  const [answers, setAnswers] = useState<Partial<FlyerBriefFormValues & { format: FlyerFormat; renderMode: FlyerRenderMode }>>({})
-  const [loading, setLoading] = useState(false)
+  const [interviewLoading, setInterviewLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const mountedRef = useRef(false)
+
+  useEffect(() => {
+    if (mountedRef.current) return
+    mountedRef.current = true
+
+    async function startInterview() {
+      const { data, error: fnError } = await supabase.functions.invoke('interview-flyer', {
+        body: { history: [], message: '' },
+      })
+
+      if (fnError) {
+        setError(fnError.message)
+        setInterviewLoading(false)
+        return
+      }
+
+      const response = data as InterviewResponse
+      setMessages([{ role: 'assistant', text: response.message }])
+      setHistory([{ role: 'assistant', content: response.message }])
+      setInterviewLoading(false)
+    }
+
+    startInterview()
+  }, [])
 
   useEffect(() => {
     if (typeof bottomRef.current?.scrollIntoView === 'function') {
@@ -126,15 +118,14 @@ export default function GenerateForm({ onResult }: Props) {
     }
   }, [messages])
 
-  async function triggerGeneration(
-    finalAnswers: FlyerBriefFormValues,
-    selectedFormat: FlyerFormat,
-    selectedRenderMode: FlyerRenderMode,
-  ) {
-    setLoading(true)
+  async function triggerGeneration(brief: FlyerBrief) {
+    setGenerating(true)
     setError(null)
 
-    const threadTitle = finalAnswers.campaignGoal.slice(0, 60) || 'Untitled flyer'
+    const selectedFormat = brief.format as FlyerFormat
+    const selectedRenderMode = brief.renderMode as FlyerRenderMode
+    const threadTitle = brief.campaignGoal.slice(0, 60) || 'Untitled flyer'
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: threadData, error: threadError } = (await (supabase as any)
       .from('threads')
@@ -144,34 +135,24 @@ export default function GenerateForm({ onResult }: Props) {
 
     if (threadError || !threadData) {
       setError(threadError?.message ?? 'Failed to create thread')
-      setLoading(false)
+      setGenerating(false)
       return
     }
 
     const thread: Thread = threadData
+    const prompt = toPrompt(brief)
 
     const requestBody: FlyerGenerationRequest = {
       type: 'flyer_text',
-      prompt: toPrompt(finalAnswers, selectedFormat),
-      flyer: {
-        campaignGoal: finalAnswers.campaignGoal,
-        productName: finalAnswers.productName,
-        keyDetails: finalAnswers.keyDetails,
-        cta: finalAnswers.cta,
-        tone: finalAnswers.tone,
-        colorVibe: finalAnswers.colorVibe,
-        fontVibe: finalAnswers.fontVibe,
-        formatConstraints: finalAnswers.formatConstraints,
-        format: selectedFormat,
-        renderMode: selectedRenderMode,
-      },
+      prompt,
+      flyer: brief,
     }
 
     const { data, error: fnError } = await supabase.functions.invoke('generate-flyer', {
       body: requestBody,
     })
 
-    setLoading(false)
+    setGenerating(false)
 
     if (fnError) {
       setError(fnError.message)
@@ -185,7 +166,7 @@ export default function GenerateForm({ onResult }: Props) {
     await (supabase as any).from('messages').insert({
       thread_id: thread.id,
       role: 'user',
-      content: requestBody.prompt,
+      content: prompt,
       flyer_item_id: null,
     })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -199,49 +180,42 @@ export default function GenerateForm({ onResult }: Props) {
     onResult(thread, mergedItem)
   }
 
-  function advanceToStep(nextStep: number, newMessages: InterviewMessage[]) {
-    if (nextStep < STEPS.length) {
-      setMessages([...newMessages, { role: 'assistant', text: STEPS[nextStep].question }])
-      setStep(nextStep)
-    }
-  }
-
-  function handleTextSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const text = currentInput.trim()
-    if (!text || loading) return
+    if (!text || interviewLoading || generating) return
 
-    const field = STEPS[step].field as TextStepField
-    const newAnswers = { ...answers, [field]: text }
-    const newMessages: InterviewMessage[] = [...messages, { role: 'user', text }]
-
-    setAnswers(newAnswers)
+    const newUserMessage: DisplayMessage = { role: 'user', text }
+    const newMessages = [...messages, newUserMessage]
+    setMessages(newMessages)
     setCurrentInput('')
-    advanceToStep(step + 1, newMessages)
-  }
+    setInterviewLoading(true)
+    setError(null)
 
-  function handleChoiceSelect(field: ChoiceStepField, value: string, label: string) {
-    const newAnswers = { ...answers, [field]: value }
-    const newMessages: InterviewMessage[] = [...messages, { role: 'user', text: label }]
+    const updatedHistory: HistoryMessage[] = [...history, { role: 'user', content: text }]
 
-    setAnswers(newAnswers)
+    const { data, error: fnError } = await supabase.functions.invoke('interview-flyer', {
+      body: { history: updatedHistory, message: text },
+    })
 
-    const nextStep = step + 1
-    if (nextStep < STEPS.length) {
-      advanceToStep(nextStep, newMessages)
-    } else {
-      // All questions answered — generate
-      setMessages(newMessages)
-      setStep(nextStep)
+    if (fnError) {
+      setError(fnError.message)
+      setInterviewLoading(false)
+      return
+    }
 
-      const finalAnswers = newAnswers as FlyerBriefFormValues & { format: FlyerFormat; renderMode: FlyerRenderMode }
-      triggerGeneration(finalAnswers, finalAnswers.format, finalAnswers.renderMode)
+    const response = data as InterviewResponse
+    const assistantHistory: HistoryMessage = { role: 'assistant', content: response.message }
+    setHistory([...updatedHistory, assistantHistory])
+    setMessages([...newMessages, { role: 'assistant', text: response.message }])
+    setInterviewLoading(false)
+
+    if (response.complete && response.brief) {
+      triggerGeneration(response.brief)
     }
   }
 
-  const currentStep = STEPS[step]
-  const isChoiceStep = currentStep?.field === 'format' || currentStep?.field === 'renderMode'
-  const isDone = step >= STEPS.length
+  const isDisabled = interviewLoading || generating
 
   return (
     <div className="space-y-4">
@@ -267,33 +241,23 @@ export default function GenerateForm({ onResult }: Props) {
 
       {error && <p className="text-sm text-red-500">{error}</p>}
 
-      {loading ? (
+      {generating ? (
         <p className="text-sm text-ink-muted text-center py-2">Generating your flyer...</p>
-      ) : isDone ? null : isChoiceStep ? (
-        <div className="flex gap-2">
-          {(currentStep.field === 'format' ? FORMAT_OPTIONS : RENDER_MODE_OPTIONS).map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => handleChoiceSelect(currentStep.field as ChoiceStepField, opt.value, opt.label)}
-              className="flex-1 border border-border rounded-lg px-4 py-2.5 text-sm font-medium hover:border-purple-400 hover:text-purple-600 transition-colors"
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+      ) : interviewLoading && messages.length === 0 ? (
+        <p className="text-sm text-ink-muted text-center py-2">Starting interview...</p>
       ) : (
-        <form onSubmit={handleTextSubmit} className="flex gap-2">
+        <form onSubmit={handleSubmit} className="flex gap-2">
           <input
             value={currentInput}
             onChange={(e) => setCurrentInput(e.target.value)}
             placeholder="Type your answer..."
+            disabled={isDisabled}
             autoFocus
-            className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-canvas text-ink placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-purple-400"
+            className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-canvas text-ink placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:opacity-50"
           />
           <button
             type="submit"
-            disabled={!currentInput.trim()}
+            disabled={!currentInput.trim() || isDisabled}
             className="bg-purple-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             aria-label="Send"
           >

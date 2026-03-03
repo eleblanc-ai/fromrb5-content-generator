@@ -51,21 +51,17 @@ const mockFlyerItem = {
   created_at: '2026-03-03T00:00:00Z',
 }
 
-async function answerAllTextQuestions() {
-  const answers = [
-    'Jasmine Green Reserve',
-    'Boost weekend sales',
-    'First flush, floral aroma',
-    'Order today',
-    'Premium and warm',
-    'Lavender and charcoal',
-    'Modern editorial sans',
-    'Keep safe margins',
-  ]
-  for (const answer of answers) {
-    await userEvent.type(screen.getByPlaceholderText('Type your answer...'), answer)
-    await userEvent.click(screen.getByRole('button', { name: 'Send' }))
-  }
+const mockBrief = {
+  productName: 'Jasmine Green Reserve',
+  campaignGoal: 'Boost weekend sales',
+  keyDetails: 'First flush, floral aroma',
+  cta: 'Order today',
+  tone: 'Premium and warm',
+  colorVibe: 'Lavender and charcoal',
+  fontVibe: 'Modern editorial sans',
+  formatConstraints: 'Keep safe margins',
+  format: 'instagram_post' as const,
+  renderMode: 'ai_composed' as const,
 }
 
 describe('GenerateForm', () => {
@@ -77,98 +73,142 @@ describe('GenerateForm', () => {
     mockThreadSingle.mockResolvedValue({ data: mockThread, error: null })
   })
 
-  it('renders the opening interview question', () => {
+  it('shows loading state while interview is starting', () => {
+    mockInvoke.mockImplementation(() => new Promise(() => {}))
     render(<GenerateForm onResult={() => {}} />)
-    expect(screen.getByText('What product are we making this flyer for?')).toBeInTheDocument()
+    expect(screen.getByText('Starting interview...')).toBeInTheDocument()
+  })
+
+  it('renders opening question after interview starts', async () => {
+    mockInvoke.mockResolvedValueOnce({
+      data: { message: 'What product are we making this flyer for?', complete: false },
+      error: null,
+    })
+    render(<GenerateForm onResult={() => {}} />)
+    await waitFor(() => {
+      expect(screen.getByText('What product are we making this flyer for?')).toBeInTheDocument()
+    })
     expect(screen.getByPlaceholderText('Type your answer...')).toBeInTheDocument()
   })
 
-  it('advances to next question after user submits an answer', async () => {
+  it('shows next question after user submits an answer', async () => {
+    mockInvoke
+      .mockResolvedValueOnce({
+        data: { message: 'What product are we making this flyer for?', complete: false },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: { message: "What's the campaign goal?", complete: false },
+        error: null,
+      })
+
     render(<GenerateForm onResult={() => {}} />)
+    await waitFor(() => screen.getByPlaceholderText('Type your answer...'))
 
     await userEvent.type(screen.getByPlaceholderText('Type your answer...'), 'Jasmine Green Reserve')
     await userEvent.click(screen.getByRole('button', { name: 'Send' }))
 
-    expect(screen.getByText('Jasmine Green Reserve')).toBeInTheDocument()
-    expect(
-      screen.getByText("What's the campaign goal — what should this flyer achieve?"),
-    ).toBeInTheDocument()
-  })
-
-  it('shows format button choices after all text questions are answered', async () => {
-    render(<GenerateForm onResult={() => {}} />)
-
-    await answerAllTextQuestions()
-
-    expect(screen.getByRole('button', { name: 'Instagram Post' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Instagram Story' })).toBeInTheDocument()
-  })
-
-  it('shows render mode button choices after format is selected', async () => {
-    render(<GenerateForm onResult={() => {}} />)
-
-    await answerAllTextQuestions()
-    await userEvent.click(screen.getByRole('button', { name: 'Instagram Post' }))
-
-    expect(screen.getByRole('button', { name: 'AI composed' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Overlay' })).toBeInTheDocument()
-  })
-
-  it('auto-generates after render mode is selected and fires onResult', async () => {
-    mockInvoke.mockResolvedValue({
-      data: {
-        item: mockFlyerItem,
-        variants: [{ id: 'v1', prompt: 'Variant', image_url: 'https://example.com/v1.png' }],
-      },
-      error: null,
+    await waitFor(() => {
+      expect(screen.getByText('Jasmine Green Reserve')).toBeInTheDocument()
+      expect(screen.getByText("What's the campaign goal?")).toBeInTheDocument()
     })
+  })
+
+  it('auto-generates and fires onResult when interview completes', async () => {
+    mockInvoke
+      .mockResolvedValueOnce({
+        data: { message: 'What product are we making this flyer for?', complete: false },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: {
+          message: 'Perfect, I have everything I need — generating your flyer now!',
+          complete: true,
+          brief: mockBrief,
+        },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: {
+          item: mockFlyerItem,
+          variants: [{ id: 'v1', prompt: 'Variant', image_url: 'https://example.com/v1.png' }],
+        },
+        error: null,
+      })
+
     const onResult = vi.fn()
     render(<GenerateForm onResult={onResult} />)
+    await waitFor(() => screen.getByPlaceholderText('Type your answer...'))
 
-    await answerAllTextQuestions()
-    await userEvent.click(screen.getByRole('button', { name: 'Instagram Post' }))
-    await userEvent.click(screen.getByRole('button', { name: 'AI composed' }))
+    await userEvent.type(screen.getByPlaceholderText('Type your answer...'), 'Jasmine Green Reserve')
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }))
 
     await waitFor(() => {
-      expect(mockInvoke).toHaveBeenCalledWith(
-        'generate-flyer',
-        expect.objectContaining({
-          body: expect.objectContaining({
-            type: 'flyer_text',
-            flyer: expect.objectContaining({
-              productName: 'Jasmine Green Reserve',
-              campaignGoal: 'Boost weekend sales',
-              format: 'instagram_post',
-              renderMode: 'ai_composed',
-            }),
-          }),
-        }),
-      )
       expect(onResult).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'thread-123' }),
         expect.objectContaining({ id: 'item-1' }),
       )
     })
+
+    expect(mockInvoke).toHaveBeenCalledWith(
+      'generate-flyer',
+      expect.objectContaining({
+        body: expect.objectContaining({
+          type: 'flyer_text',
+          flyer: expect.objectContaining({
+            productName: 'Jasmine Green Reserve',
+            campaignGoal: 'Boost weekend sales',
+            format: 'instagram_post',
+            renderMode: 'ai_composed',
+          }),
+        }),
+      }),
+    )
   })
 
-  it('shows generating state while pending', async () => {
-    mockInvoke.mockImplementation(() => new Promise(() => {}))
+  it('shows generating state while flyer is being created', async () => {
+    mockInvoke
+      .mockResolvedValueOnce({
+        data: { message: 'What product are we making this flyer for?', complete: false },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: {
+          message: 'Generating!',
+          complete: true,
+          brief: mockBrief,
+        },
+        error: null,
+      })
+      .mockImplementationOnce(() => new Promise(() => {})) // generate-flyer never resolves
+
     render(<GenerateForm onResult={() => {}} />)
+    await waitFor(() => screen.getByPlaceholderText('Type your answer...'))
 
-    await answerAllTextQuestions()
-    await userEvent.click(screen.getByRole('button', { name: 'Instagram Post' }))
-    await userEvent.click(screen.getByRole('button', { name: 'AI composed' }))
+    await userEvent.type(screen.getByPlaceholderText('Type your answer...'), 'Jasmine Green Reserve')
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }))
 
-    expect(screen.getByText('Generating your flyer...')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('Generating your flyer...')).toBeInTheDocument()
+    })
   })
 
-  it('shows error message on generation failure', async () => {
-    mockInvoke.mockResolvedValue({ data: null, error: { message: 'API call failed' } })
-    render(<GenerateForm onResult={() => {}} />)
+  it('shows error message when interview call fails', async () => {
+    mockInvoke
+      .mockResolvedValueOnce({
+        data: { message: 'What product are we making this flyer for?', complete: false },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: 'API call failed' },
+      })
 
-    await answerAllTextQuestions()
-    await userEvent.click(screen.getByRole('button', { name: 'Instagram Post' }))
-    await userEvent.click(screen.getByRole('button', { name: 'AI composed' }))
+    render(<GenerateForm onResult={() => {}} />)
+    await waitFor(() => screen.getByPlaceholderText('Type your answer...'))
+
+    await userEvent.type(screen.getByPlaceholderText('Type your answer...'), 'Jasmine Green Reserve')
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }))
 
     await waitFor(() => {
       expect(screen.getByText('API call failed')).toBeInTheDocument()
