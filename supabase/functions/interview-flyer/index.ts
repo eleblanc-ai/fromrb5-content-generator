@@ -63,7 +63,18 @@ Deno.serve(async (req) => {
     // Strip markdown code fences if Claude wraps the JSON
     const json = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
 
-    const parsed = JSON.parse(json)
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(json)
+    } catch {
+      // Claude didn't return valid JSON — fall back to a safe opening question on first turn
+      const isFirstTurn = messages.length === 1 && (messages[0] as { content: string }).content === 'Start the interview.'
+      if (isFirstTurn) {
+        parsed = { message: 'What product are we making this flyer for?', complete: false }
+      } else {
+        throw new Error(`Claude returned non-JSON: ${text.slice(0, 300)}`)
+      }
+    }
 
     return new Response(JSON.stringify(parsed), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

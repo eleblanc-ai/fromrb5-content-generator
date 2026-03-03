@@ -98,7 +98,15 @@ export default function GenerateForm({ onResult }: Props) {
       })
 
       if (fnError) {
-        setError(fnError.message)
+        const ctx = (fnError as unknown as { context?: Response }).context
+        let msg = fnError.message
+        try {
+          if (ctx) {
+            const body = (await ctx.clone().json()) as { error?: string }
+            msg = body?.error ?? msg
+          }
+        } catch { /* ignore */ }
+        setError(msg)
         setInterviewLoading(false)
         return
       }
@@ -199,7 +207,15 @@ export default function GenerateForm({ onResult }: Props) {
     })
 
     if (fnError) {
-      setError(fnError.message)
+      const ctx = (fnError as unknown as { context?: Response }).context
+      let msg = fnError.message
+      try {
+        if (ctx) {
+          const body = (await ctx.clone().json()) as { error?: string }
+          msg = body?.error ?? msg
+        }
+      } catch { /* ignore */ }
+      setError(msg)
       setInterviewLoading(false)
       return
     }
