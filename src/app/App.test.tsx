@@ -21,8 +21,11 @@ vi.mock('../features/generate', () => ({
   GenerateForm: ({ onResult }: { onResult: (item: typeof generatedItem) => void }) => (
     <button onClick={() => onResult(generatedItem)}>Generate</button>
   ),
-  ResultCard: ({ item }: { item: { id: string; prompt: string } }) => (
-    <article data-testid="result-card">{item.prompt}</article>
+  ResultCard: ({ item, onDeleted }: { item: { id: string; prompt: string }; onDeleted?: () => void }) => (
+    <article data-testid="result-card">
+      {item.prompt}
+      <button onClick={onDeleted}>Delete</button>
+    </article>
   ),
 }))
 
@@ -111,6 +114,45 @@ describe('App', () => {
     const cards = await screen.findAllByTestId('result-card')
     expect(cards[0]).toHaveTextContent('Fresh generated item')
     expect(cards[1]).toHaveTextContent('Older history item')
+  })
+
+  it('removes deleted item from history when onDeleted fires', async () => {
+    mockOrder.mockResolvedValue({
+      data: [
+        {
+          id: 'history-1',
+          type: 'tea_writeup',
+          prompt: 'Item to delete',
+          text_output: 'Text 1',
+          image_url: null,
+          parent_id: null,
+          created_at: '2026-03-01T10:00:00Z',
+        },
+        {
+          id: 'history-2',
+          type: 'tea_writeup',
+          prompt: 'Item to keep',
+          text_output: 'Text 2',
+          image_url: null,
+          parent_id: null,
+          created_at: '2026-03-01T09:00:00Z',
+        },
+      ],
+      error: null,
+    })
+
+    render(<App />)
+
+    const cards = await screen.findAllByTestId('result-card')
+    expect(cards).toHaveLength(2)
+
+    const deleteButtons = screen.getAllByRole('button', { name: 'Delete' })
+    await userEvent.click(deleteButtons[0])
+
+    await waitFor(() => {
+      expect(screen.queryByText('Item to delete')).not.toBeInTheDocument()
+      expect(screen.getByText('Item to keep')).toBeInTheDocument()
+    })
   })
 
   it('renders the generate form', async () => {

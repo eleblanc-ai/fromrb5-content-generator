@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import Anthropic from 'npm:@anthropic-ai/sdk'
 import { GoogleGenAI } from 'npm:@google/genai'
 
 const corsHeaders = {
@@ -24,6 +25,13 @@ interface FlyerBrief {
   renderMode: FlyerRenderMode
 }
 
+interface FlyerCopyBlock {
+  headline: string
+  tagline: string
+  body: string
+  cta: string
+}
+
 interface StoredVariant {
   id: string
   prompt: string
@@ -42,6 +50,44 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
+async function generateCopyBlock(flyer: FlyerBrief, apiKey: string): Promise<FlyerCopyBlock> {
+  const anthropic = new Anthropic({ apiKey })
+
+  const message = await anthropic.messages.create({
+    model: 'claude-sonnet-4-5',
+    max_tokens: 256,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          'Generate concise flyer copy for a premium tea brand.',
+          'Return ONLY valid JSON with exactly these fields: headline, tagline, body, cta.',
+          'headline: under 6 words. tagline: under 8 words. body: under 20 words. cta: under 5 words.',
+          `Campaign goal: ${flyer.campaignGoal}`,
+          `Product: ${flyer.productName}`,
+          `Key details: ${flyer.keyDetails}`,
+          `CTA hint: ${flyer.cta}`,
+          `Tone: ${flyer.tone}`,
+          'Return JSON only — no markdown, no explanation.',
+        ].join('\n'),
+      },
+    ],
+  })
+
+  const text = message.content[0].type === 'text' ? message.content[0].text : ''
+
+  try {
+    return JSON.parse(text) as FlyerCopyBlock
+  } catch {
+    return {
+      headline: flyer.productName,
+      tagline: flyer.campaignGoal,
+      body: flyer.keyDetails,
+      cta: flyer.cta,
+    }
+  }
+}
+
 function getFormatInstructions(format: FlyerFormat) {
   if (format === 'instagram_story') {
     return 'Canvas: 1080x1920 vertical composition for Instagram Story. Keep key text centered away from top/bottom UI overlays.'
@@ -50,36 +96,34 @@ function getFormatInstructions(format: FlyerFormat) {
   return 'Canvas: 1080x1080 square composition for Instagram Post. Keep balanced hierarchy and center-safe margins.'
 }
 
-function buildFlyerImagePrompt(flyer: FlyerBrief) {
+function buildFlyerImagePrompt(flyer: FlyerBrief, copy: FlyerCopyBlock) {
   const formatInstructions = getFormatInstructions(flyer.format)
+
+  const copyText = [
+    `Headline: "${copy.headline}"`,
+    `Tagline: "${copy.tagline}"`,
+    `Body: "${copy.body}"`,
+    `Call to action: "${copy.cta}"`,
+  ].join('\n')
 
   if (flyer.renderMode === 'overlay') {
     return [
-      'Create a final marketing flyer image for a premium tea brand.',
-      'Use a clean, high-contrast composition designed as if text is precisely laid out in structured blocks.',
-      'Include all required copy content in the final image output.',
+      'Create a background-only image for a premium tea brand flyer.',
+      'NO text, NO lettering, NO words, NO typography of any kind in the image.',
+      'Pure visual composition only — textures, gradients, product photography, botanical elements.',
+      'Leave the center area relatively clear and uncluttered to accommodate programmatic text overlay.',
       formatInstructions,
-      `Campaign goal: ${flyer.campaignGoal}`,
-      `Product name: ${flyer.productName}`,
-      `Key details: ${flyer.keyDetails}`,
-      `CTA: ${flyer.cta}`,
-      `Tone: ${flyer.tone}`,
       `Color vibe: ${flyer.colorVibe}`,
-      `Font vibe: ${flyer.fontVibe}`,
       `Constraints: ${flyer.formatConstraints}`,
       'Design style: premium, calm, editorial tea brand aesthetic.',
-      'Output must be one complete, publish-ready flyer image.',
+      'Output must be a text-free background image suitable for programmatic text overlay.',
     ].join('\n')
   }
 
   return [
     'Create one complete, publish-ready marketing flyer image for a premium tea brand with text baked in.',
     formatInstructions,
-    `Campaign goal: ${flyer.campaignGoal}`,
-    `Product name: ${flyer.productName}`,
-    `Key details: ${flyer.keyDetails}`,
-    `CTA: ${flyer.cta}`,
-    `Tone: ${flyer.tone}`,
+    copyText,
     `Color vibe: ${flyer.colorVibe}`,
     `Font vibe: ${flyer.fontVibe}`,
     `Constraints: ${flyer.formatConstraints}`,
@@ -88,9 +132,9 @@ function buildFlyerImagePrompt(flyer: FlyerBrief) {
   ].join('\n')
 }
 
-function buildVariantPrompt(flyer: FlyerBrief, variantIndex: number) {
+function buildVariantPrompt(flyer: FlyerBrief, copy: FlyerCopyBlock, variantIndex: number) {
   return [
-    buildFlyerImagePrompt(flyer),
+    buildFlyerImagePrompt(flyer, copy),
     `Create distinct creative direction variant ${variantIndex} of 3 while preserving the core campaign message.`,
     'Vary composition, visual rhythm, and emphasis across variants.',
   ].join('\n\n')
@@ -102,12 +146,13 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { prompt, type, flyer, parentId, sourceImageUrl } = (await req.json()) as {
+    const { prompt, type, flyer, parentId, sourceImageUrl, copyOverride } = (await req.json()) as {
       prompt: string
       type: 'flyer_text'
       flyer: FlyerBrief
       parentId?: string
       sourceImageUrl?: string
+      copyOverride?: FlyerCopyBlock
     }
 
     if (!prompt || !flyer || type !== 'flyer_text') {
@@ -116,6 +161,8 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
+
+    const copy = copyOverride ?? await generateCopyBlock(flyer, Deno.env.get('ANTHROPIC_API_KEY') ?? '')
 
     const ai = new GoogleGenAI({ apiKey: Deno.env.get('GEMINI_API_KEY') ?? '' })
 
@@ -144,7 +191,7 @@ Deno.serve(async (req) => {
     const storedVariants: StoredVariant[] = []
 
     for (let index = 1; index <= 3; index += 1) {
-      const variantPrompt = buildVariantPrompt(flyer, index)
+      const variantPrompt = buildVariantPrompt(flyer, copy, index)
 
       const contents = sourceInlineData
         ? [
@@ -191,6 +238,7 @@ Deno.serve(async (req) => {
       const metadataText = JSON.stringify({
         flyer,
         variantIndex: index,
+        copy,
       })
 
       const { data, error } = await supabase
@@ -215,6 +263,7 @@ Deno.serve(async (req) => {
       flyer,
       variantIndex: 1,
       variants: storedVariants,
+      copy,
     })
 
     const primaryItem = {

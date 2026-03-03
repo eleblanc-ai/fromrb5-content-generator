@@ -110,3 +110,30 @@ Added a "Download all variants" button to flyer result cards. When clicked, it f
 | 30 | `src/features/generate/ResultCard.test.tsx` | fetches all variants and triggers zip download on download all click | ✅ Pass | Fetches each variant URL, creates zip blob, triggers anchor download |
 
 ---
+
+## Slice 10: Editable Copy Fields
+
+Claude now generates a structured copy block (headline, tagline, body, CTA) for each flyer generation. The copy is stored in variant metadata and displayed as editable fields on the result card. Editing and clicking "Re-render with edits" re-invokes the Edge Function with `copyOverride`, skipping the Claude step and using the edited copy directly in the Gemini prompt. The form is pre-filled with sample values to avoid repetitive data entry during testing.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| 31 | `src/features/generate/GenerateForm.test.tsx` | enables submit when form is pre-filled | ✅ Pass | Button enabled with sample defaults present |
+| 32 | `src/features/generate/GenerateForm.test.tsx` | disables submit when a required field is cleared | ✅ Pass | Button disabled when a required field is emptied |
+| 33 | `src/features/generate/ResultCard.test.tsx` | renders editable copy fields for flyer cards with copy block | ✅ Pass | Headline/Tagline/Body/CTA inputs pre-populated from metadata |
+| 34 | `src/features/generate/ResultCard.test.tsx` | invokes generate-flyer with copyOverride when re-render with edits is clicked | ✅ Pass | Edited copy sent as copyOverride in invoke payload |
+
+---
+
+## Slice 11: Mode B (Text Overlay) + Delete History
+
+Mode B generates text-free backgrounds via Gemini and composites the copy fields onto each background using the Canvas 2D API with system sans-serif, white text, and drop shadows. Delete removes all variant rows for a flyer card (or a single row for other types) from Supabase and removes the card from the history list.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| 35 | `src/features/generate/ResultCard.test.tsx` | shows a delete button on all card types | ✅ Pass | Delete button present on text, image, and flyer cards |
+| 36 | `src/features/generate/ResultCard.test.tsx` | deletes all variant rows when delete is clicked on a flyer card | ✅ Pass | All variant IDs passed to supabase delete; onDeleted fires |
+| 37 | `src/features/generate/ResultCard.test.tsx` | deletes single item when delete is clicked on a non-flyer card | ✅ Pass | Single ID deletion for non-variant items |
+| 38 | `src/features/generate/ResultCard.test.tsx` | renders canvas elements for overlay-mode flyer cards | ✅ Pass | Canvas elements present in DOM for overlay renderMode |
+| 39 | `src/app/App.test.tsx` | removes deleted item from history when onDeleted fires | ✅ Pass | Item removed from history list on delete callback |
+
+---

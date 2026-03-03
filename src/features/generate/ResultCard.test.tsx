@@ -5,12 +5,16 @@ import ResultCard from './ResultCard'
 import type { ContentItem } from '../../shared/config/supabase'
 
 const mockInvoke = vi.hoisted(() => vi.fn())
+const mockDeleteIn = vi.hoisted(() => vi.fn().mockResolvedValue({ error: null }))
+const mockDelete = vi.hoisted(() => vi.fn(() => ({ in: mockDeleteIn })))
+const mockFrom = vi.hoisted(() => vi.fn(() => ({ delete: mockDelete })))
 
 vi.mock('../../shared/config/supabase', () => ({
   supabase: {
     functions: {
       invoke: mockInvoke,
     },
+    from: mockFrom,
   },
 }))
 
@@ -56,15 +60,59 @@ const mockFlyerImageItem: ContentItem = {
       { id: 'v2', prompt: 'Variant 2', image_url: 'https://example.com/flyer-v2.png' },
       { id: 'v3', prompt: 'Variant 3', image_url: 'https://example.com/flyer-v3.png' },
     ],
+    copy: {
+      headline: 'Sip the Reserve',
+      tagline: 'First flush jasmine, this weekend only',
+      body: 'Join us for a guided tasting of our most prized harvest.',
+      cta: 'RSVP today',
+    },
   }),
   image_url: 'https://example.com/flyer.png',
   parent_id: null,
   created_at: '2026-03-01T00:00:00Z',
 }
 
+const mockFlyerOverlayItem: ContentItem = {
+  id: '888',
+  type: 'flyer_text',
+  prompt: 'Overlay mode flyer',
+  text_output: JSON.stringify({
+    flyer: {
+      campaignGoal: 'Drive event signups',
+      productName: 'Jasmine Green Reserve',
+      keyDetails: 'Floral aroma, smooth finish',
+      cta: 'RSVP today',
+      tone: 'Calm premium',
+      colorVibe: 'Lavender charcoal',
+      fontVibe: 'Editorial sans',
+      formatConstraints: 'Keep top safe area clear',
+      format: 'instagram_post',
+      renderMode: 'overlay',
+    },
+    variants: [
+      { id: 'ov1', prompt: 'Overlay Variant 1', image_url: 'https://example.com/bg-v1.png' },
+      { id: 'ov2', prompt: 'Overlay Variant 2', image_url: 'https://example.com/bg-v2.png' },
+      { id: 'ov3', prompt: 'Overlay Variant 3', image_url: 'https://example.com/bg-v3.png' },
+    ],
+    copy: {
+      headline: 'Sip the Reserve',
+      tagline: 'First flush jasmine, this weekend only',
+      body: 'Join us for a guided tasting of our most prized harvest.',
+      cta: 'RSVP today',
+    },
+  }),
+  image_url: 'https://example.com/bg-primary.png',
+  parent_id: null,
+  created_at: '2026-03-02T00:00:00Z',
+}
+
 describe('ResultCard', () => {
   beforeEach(() => {
     mockInvoke.mockReset()
+    mockFrom.mockClear()
+    mockDelete.mockClear()
+    mockDeleteIn.mockReset()
+    mockDeleteIn.mockResolvedValue({ error: null })
 
     Object.defineProperty(navigator, 'clipboard', {
       value: {
@@ -298,5 +346,101 @@ describe('ResultCard', () => {
       expect(anchor.download).toContain('.zip')
       expect(clickSpy).toHaveBeenCalledTimes(1)
     })
+  })
+
+  it('renders editable copy fields for flyer cards with copy block', () => {
+    render(<ResultCard item={mockFlyerImageItem} />)
+    expect(screen.getByLabelText('Headline')).toHaveValue('Sip the Reserve')
+    expect(screen.getByLabelText('Tagline')).toHaveValue('First flush jasmine, this weekend only')
+    expect(screen.getByLabelText('Body')).toHaveValue(
+      'Join us for a guided tasting of our most prized harvest.',
+    )
+    expect(screen.getByLabelText('CTA')).toHaveValue('RSVP today')
+    expect(screen.getByRole('button', { name: 'Re-render with edits' })).toBeInTheDocument()
+  })
+
+  it('invokes generate-flyer with copyOverride when re-render with edits is clicked', async () => {
+    const rerenderItem: ContentItem = {
+      id: 'rerender-1',
+      type: 'flyer_text',
+      prompt: 'Weekend tea event flyer',
+      text_output: JSON.stringify({ flyer: { format: 'instagram_post' }, copy: { headline: 'New Headline', tagline: 'New Tagline', body: 'New Body', cta: 'New CTA' } }),
+      image_url: 'https://example.com/rerendered.png',
+      parent_id: 'v1',
+      created_at: '2026-03-02T00:00:00Z',
+    }
+
+    mockInvoke.mockResolvedValue({
+      data: { item: rerenderItem, variants: [] },
+      error: null,
+    })
+
+    const onIterated = vi.fn()
+    render(<ResultCard item={mockFlyerImageItem} onIterated={onIterated} />)
+
+    const headlineInput = screen.getByLabelText('Headline')
+    await userEvent.clear(headlineInput)
+    await userEvent.type(headlineInput, 'Updated Headline')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Re-render with edits' }))
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith(
+        'generate-flyer',
+        expect.objectContaining({
+          body: expect.objectContaining({
+            type: 'flyer_text',
+            copyOverride: expect.objectContaining({ headline: 'Updated Headline' }),
+          }),
+        }),
+      )
+      expect(onIterated).toHaveBeenCalled()
+    })
+  })
+
+  it('shows a delete button on all card types', () => {
+    const { rerender } = render(<ResultCard item={mockTextItem} />)
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument()
+
+    rerender(<ResultCard item={mockImageItem} />)
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument()
+
+    rerender(<ResultCard item={mockFlyerImageItem} />)
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument()
+  })
+
+  it('deletes all variant rows when delete is clicked on a flyer card', async () => {
+    const onDeleted = vi.fn()
+    render(<ResultCard item={mockFlyerImageItem} onDeleted={onDeleted} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+
+    await waitFor(() => {
+      expect(mockFrom).toHaveBeenCalledWith('content_items')
+      expect(mockDelete).toHaveBeenCalled()
+      expect(mockDeleteIn).toHaveBeenCalledWith(
+        'id',
+        expect.arrayContaining(['999', 'v1', 'v2', 'v3']),
+      )
+      expect(onDeleted).toHaveBeenCalled()
+    })
+  })
+
+  it('deletes single item when delete is clicked on a non-flyer card', async () => {
+    const onDeleted = vi.fn()
+    render(<ResultCard item={mockTextItem} onDeleted={onDeleted} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+
+    await waitFor(() => {
+      expect(mockDeleteIn).toHaveBeenCalledWith('id', ['123'])
+      expect(onDeleted).toHaveBeenCalled()
+    })
+  })
+
+  it('renders canvas elements for overlay-mode flyer cards', () => {
+    render(<ResultCard item={mockFlyerOverlayItem} />)
+    const canvases = document.querySelectorAll('canvas')
+    expect(canvases.length).toBeGreaterThanOrEqual(3)
   })
 })

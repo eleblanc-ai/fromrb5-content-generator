@@ -50,7 +50,7 @@ export default function App() {
         {history.length > 0 && (
           <section className="space-y-4" aria-label="Content history">
             {history.map((item) => (
-              <ResultCard key={item.id} item={item} onIterated={handleResult} />
+              <ResultCard key={item.id} item={item} onIterated={handleResult} onDeleted={() => setHistory((h) => h.filter((x) => x.id !== item.id))} />
             ))}
           </section>
         )}

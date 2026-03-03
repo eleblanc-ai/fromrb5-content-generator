@@ -38,35 +38,28 @@ const mockTextItem = {
 }
 
 async function fillRequiredFields() {
-  await userEvent.type(
-    screen.getByPlaceholderText('Drive weekend tea tasting signups'),
-    'Drive weekend tea tasting signups',
-  )
-  await userEvent.type(
-    screen.getByPlaceholderText('Jasmine Green Reserve'),
-    'Jasmine Green Reserve',
-  )
-  await userEvent.type(
-    screen.getByPlaceholderText('First flush jasmine pearls, floral aroma, small-batch packaging'),
-    'First flush jasmine pearls, floral aroma, small-batch packaging',
-  )
-  await userEvent.type(
-    screen.getByPlaceholderText('Tap to order today'),
-    'Tap to order today',
-  )
-  await userEvent.type(screen.getByPlaceholderText('Premium and warm'), 'Premium and warm')
-  await userEvent.type(
-    screen.getByPlaceholderText('Lavender and charcoal'),
-    'Lavender and charcoal',
-  )
-  await userEvent.type(
-    screen.getByPlaceholderText('Modern editorial sans'),
-    'Modern editorial sans',
-  )
-  await userEvent.type(
-    screen.getByPlaceholderText('Keep safe margins for profile UI overlays'),
-    'Keep safe margins for profile UI overlays',
-  )
+  const fields: Array<{ placeholder: string; value: string }> = [
+    { placeholder: 'Drive weekend tea tasting signups', value: 'Drive weekend tea tasting signups' },
+    { placeholder: 'Jasmine Green Reserve', value: 'Jasmine Green Reserve' },
+    {
+      placeholder: 'First flush jasmine pearls, floral aroma, small-batch packaging',
+      value: 'First flush jasmine pearls, floral aroma, small-batch packaging',
+    },
+    { placeholder: 'Tap to order today', value: 'Tap to order today' },
+    { placeholder: 'Premium and warm', value: 'Premium and warm' },
+    { placeholder: 'Lavender and charcoal', value: 'Lavender and charcoal' },
+    { placeholder: 'Modern editorial sans', value: 'Modern editorial sans' },
+    {
+      placeholder: 'Keep safe margins for profile UI overlays',
+      value: 'Keep safe margins for profile UI overlays',
+    },
+  ]
+
+  for (const { placeholder, value } of fields) {
+    const element = screen.getByPlaceholderText(placeholder)
+    await userEvent.clear(element)
+    await userEvent.type(element, value)
+  }
 }
 
 describe('GenerateForm', () => {
@@ -91,8 +84,14 @@ describe('GenerateForm', () => {
     expect(screen.getByRole('option', { name: 'Overlay' })).toBeInTheDocument()
   })
 
-  it('disables submit until required brief fields are filled', () => {
+  it('enables submit when form is pre-filled', () => {
     render(<GenerateForm onResult={() => {}} />)
+    expect(screen.getByRole('button', { name: 'Generate flyer brief' })).toBeEnabled()
+  })
+
+  it('disables submit when a required field is cleared', async () => {
+    render(<GenerateForm onResult={() => {}} />)
+    await userEvent.clear(screen.getByPlaceholderText('Drive weekend tea tasting signups'))
     expect(screen.getByRole('button', { name: 'Generate flyer brief' })).toBeDisabled()
   })
 

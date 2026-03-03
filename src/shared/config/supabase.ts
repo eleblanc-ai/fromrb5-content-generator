@@ -22,10 +22,18 @@ export interface FlyerBrief {
   renderMode: FlyerRenderMode
 }
 
+export interface FlyerCopyBlock {
+  headline: string
+  tagline: string
+  body: string
+  cta: string
+}
+
 export interface FlyerGenerationRequest {
   type: 'flyer_text'
   prompt: string
   flyer: FlyerBrief
+  copyOverride?: FlyerCopyBlock
 }
 
 export interface ContentItem {

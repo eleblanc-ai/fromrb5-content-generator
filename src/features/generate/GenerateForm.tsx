@@ -29,14 +29,14 @@ interface FlyerBriefFormValues {
 }
 
 const INITIAL_FORM_VALUES: FlyerBriefFormValues = {
-  campaignGoal: '',
-  productName: '',
-  keyDetails: '',
-  cta: '',
-  tone: '',
-  colorVibe: '',
-  fontVibe: '',
-  formatConstraints: '',
+  campaignGoal: 'Drive weekend tea tasting signups',
+  productName: 'Jasmine Green Reserve',
+  keyDetails: 'First flush jasmine pearls, floral aroma, small-batch packaging',
+  cta: 'Tap to order today',
+  tone: 'Premium and warm',
+  colorVibe: 'Lavender and charcoal',
+  fontVibe: 'Modern editorial sans',
+  formatConstraints: 'Keep safe margins for profile UI overlays',
 }
 
 interface Props {

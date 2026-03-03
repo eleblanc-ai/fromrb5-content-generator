@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import JSZip from 'jszip'
 import { supabase } from '../../shared/config/supabase'
-import type { ContentItem, FlyerBrief } from '../../shared/config/supabase'
+import type { ContentItem, FlyerBrief, FlyerCopyBlock, FlyerFormat } from '../../shared/config/supabase'
 
 const TYPE_LABELS: Record<string, string> = {
   flyer_text: 'Flyer copy',
@@ -13,6 +13,7 @@ const TYPE_LABELS: Record<string, string> = {
 interface Props {
   item: ContentItem
   onIterated?: (item: ContentItem) => void
+  onDeleted?: () => void
 }
 
 interface FlyerVariant {
@@ -24,11 +25,75 @@ interface FlyerVariant {
 interface FlyerCardMetadata {
   flyer?: FlyerBrief
   variants?: FlyerVariant[]
+  copy?: FlyerCopyBlock
 }
 
 interface FlyerInvokeResponse {
   item: ContentItem
   variants?: FlyerVariant[]
+}
+
+const OVERLAY_LAYOUT: Record<FlyerFormat, { headline: number; tagline: number; body: number; cta: number; headlineSize: number; taglineSize: number; bodySize: number; ctaSize: number }> = {
+  instagram_post: { headline: 390, tagline: 470, body: 545, cta: 635, headlineSize: 80, taglineSize: 48, bodySize: 40, ctaSize: 52 },
+  instagram_story: { headline: 820, tagline: 930, body: 1030, cta: 1130, headlineSize: 90, taglineSize: 54, bodySize: 44, ctaSize: 60 },
+}
+
+async function renderFlyerOverlay(
+  canvas: HTMLCanvasElement,
+  backgroundUrl: string,
+  copy: FlyerCopyBlock,
+  format: FlyerFormat,
+): Promise<string> {
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return canvas.toDataURL('image/png')
+
+  const width = 1080
+  const height = format === 'instagram_story' ? 1920 : 1080
+  canvas.width = width
+  canvas.height = height
+
+  const response = await fetch(backgroundUrl)
+  const blob = await response.blob()
+  const blobUrl = URL.createObjectURL(blob)
+
+  await new Promise<void>((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, width, height)
+      URL.revokeObjectURL(blobUrl)
+      resolve()
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(blobUrl)
+      reject(new Error('Failed to load background image'))
+    }
+    img.src = blobUrl
+  })
+
+  const layout = OVERLAY_LAYOUT[format]
+  const centerX = width / 2
+
+  ctx.shadowColor = 'rgba(0,0,0,0.65)'
+  ctx.shadowBlur = 14
+  ctx.fillStyle = '#ffffff'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'alphabetic'
+
+  ctx.font = `bold ${layout.headlineSize}px -apple-system, BlinkMacSystemFont, sans-serif`
+  ctx.fillText(copy.headline, centerX, layout.headline)
+
+  ctx.font = `${layout.taglineSize}px -apple-system, BlinkMacSystemFont, sans-serif`
+  ctx.fillText(copy.tagline, centerX, layout.tagline)
+
+  ctx.font = `${layout.bodySize}px -apple-system, BlinkMacSystemFont, sans-serif`
+  ctx.fillText(copy.body, centerX, layout.body)
+
+  ctx.font = `bold ${layout.ctaSize}px -apple-system, BlinkMacSystemFont, sans-serif`
+  ctx.fillText(copy.cta, centerX, layout.cta)
+
+  ctx.shadowBlur = 0
+
+  return canvas.toDataURL('image/png')
 }
 
 function parseFlyerMetadata(item: ContentItem): FlyerCardMetadata | null {
@@ -60,7 +125,7 @@ function withVariants(item: ContentItem, variants: FlyerVariant[] | undefined): 
   }
 }
 
-export default function ResultCard({ item, onIterated }: Props) {
+export default function ResultCard({ item, onIterated, onDeleted }: Props) {
   const flyerMetadata = useMemo(() => parseFlyerMetadata(item), [item])
   const flyerVariants = useMemo(
     () => (flyerMetadata?.variants ?? []).filter((variant) => Boolean(variant.image_url)),
@@ -77,11 +142,55 @@ export default function ResultCard({ item, onIterated }: Props) {
   const [regenerateError, setRegenerateError] = useState<string | null>(null)
   const [downloadingAll, setDownloadingAll] = useState(false)
   const [downloadAllError, setDownloadAllError] = useState<string | null>(null)
+  const [editedCopy, setEditedCopy] = useState<FlyerCopyBlock | null>(
+    flyerMetadata?.copy ?? null,
+  )
+  const [rerenderLoading, setRerenderLoading] = useState(false)
+  const [rerenderError, setRerenderError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [overlayDataUrls, setOverlayDataUrls] = useState<Record<string, string>>({})
+  const canvasRefs = useRef<Map<string, HTMLCanvasElement>>(new Map())
+
+  const isOverlay = flyerMetadata?.flyer?.renderMode === 'overlay'
   const canIterateImage = item.type === 'image' && Boolean(item.image_url)
 
   useEffect(() => {
     setSelectedVariantId(flyerVariants[0]?.id ?? null)
   }, [item.id, flyerVariants])
+
+  useEffect(() => {
+    setEditedCopy(flyerMetadata?.copy ?? null)
+  }, [item.id, flyerMetadata?.copy])
+
+  useEffect(() => {
+    if (!isOverlay || !flyerMetadata?.copy || flyerVariants.length === 0) return
+
+    const copy = flyerMetadata.copy
+    const format = flyerMetadata.flyer?.format ?? 'instagram_post'
+
+    async function renderAll() {
+      const newUrls: Record<string, string> = {}
+
+      for (const variant of flyerVariants) {
+        if (!variant.image_url) continue
+
+        const canvas = canvasRefs.current.get(variant.id)
+        if (!canvas) continue
+
+        try {
+          const dataUrl = await renderFlyerOverlay(canvas, variant.image_url, copy, format)
+          newUrls[variant.id] = dataUrl
+        } catch {
+          // fall back to raw background url
+        }
+      }
+
+      setOverlayDataUrls(newUrls)
+    }
+
+    renderAll()
+  }, [isOverlay, flyerVariants, flyerMetadata?.copy, flyerMetadata?.flyer?.format])
 
   const selectedVariant = useMemo(() => {
     if (flyerVariants.length === 0) {
@@ -94,7 +203,11 @@ export default function ResultCard({ item, onIterated }: Props) {
     )
   }, [flyerVariants, selectedVariantId])
 
-  const previewImageUrl = selectedVariant?.image_url ?? item.image_url
+  const rawPreviewUrl = selectedVariant?.image_url ?? item.image_url
+  const previewImageUrl = isOverlay && selectedVariant
+    ? (overlayDataUrls[selectedVariant.id] ?? rawPreviewUrl)
+    : rawPreviewUrl
+
   const isFlyerStructured = item.type === 'flyer_text' && Boolean(flyerMetadata?.flyer)
   const showCopyText = Boolean(item.text_output) && !isFlyerStructured
 
@@ -106,7 +219,9 @@ export default function ResultCard({ item, onIterated }: Props) {
   }
 
   function handleDownloadImage() {
-    const downloadUrl = previewImageUrl
+    const downloadUrl = isOverlay && selectedVariant
+      ? (overlayDataUrls[selectedVariant.id] ?? rawPreviewUrl)
+      : rawPreviewUrl
     if (!downloadUrl) return
 
     const link = document.createElement('a')
@@ -115,6 +230,25 @@ export default function ResultCard({ item, onIterated }: Props) {
     document.body.appendChild(link)
     link.click()
     link.remove()
+  }
+
+  async function handleDelete() {
+    setDeleting(true)
+    setDeleteError(null)
+
+    const variantIds = flyerMetadata?.variants?.map((v) => v.id) ?? []
+    const ids = [...new Set([item.id, ...variantIds])]
+
+    const { error } = await supabase.from('content_items').delete().in('id', ids)
+
+    setDeleting(false)
+
+    if (error) {
+      setDeleteError(error.message)
+      return
+    }
+
+    onDeleted?.()
   }
 
   async function handleIterateImage(e: React.FormEvent) {
@@ -187,12 +321,19 @@ export default function ResultCard({ item, onIterated }: Props) {
         const variant = flyerVariants[i]
         if (!variant.image_url) continue
 
-        const fetchResponse = await fetch(variant.image_url)
-        if (!fetchResponse.ok) throw new Error(`Failed to fetch variant ${i + 1}`)
+        if (isOverlay && overlayDataUrls[variant.id]) {
+          const dataUrl = overlayDataUrls[variant.id]
+          const base64 = dataUrl.split(',')[1]
+          const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+          zip.file(`flyer-variant-${i + 1}.png`, bytes)
+        } else {
+          const fetchResponse = await fetch(variant.image_url)
+          if (!fetchResponse.ok) throw new Error(`Failed to fetch variant ${i + 1}`)
 
-        const blob = await fetchResponse.blob()
-        const ext = blob.type.includes('jpeg') ? 'jpg' : 'png'
-        zip.file(`flyer-variant-${i + 1}.${ext}`, blob)
+          const blob = await fetchResponse.blob()
+          const ext = blob.type.includes('jpeg') ? 'jpg' : 'png'
+          zip.file(`flyer-variant-${i + 1}.${ext}`, blob)
+        }
       }
 
       const zipBlob = await zip.generateAsync({ type: 'blob' })
@@ -211,12 +352,52 @@ export default function ResultCard({ item, onIterated }: Props) {
     setDownloadingAll(false)
   }
 
+  async function handleRerenderWithEdits() {
+    if (!isFlyerStructured || !editedCopy || !flyerMetadata?.flyer) return
+
+    setRerenderLoading(true)
+    setRerenderError(null)
+
+    const { data, error } = await supabase.functions.invoke('generate-flyer', {
+      body: {
+        type: 'flyer_text',
+        prompt: item.prompt,
+        flyer: flyerMetadata.flyer,
+        copyOverride: editedCopy,
+        parentId: selectedVariant?.id ?? item.id,
+        sourceImageUrl: selectedVariant?.image_url ?? item.image_url,
+      },
+    })
+
+    setRerenderLoading(false)
+
+    if (error) {
+      setRerenderError(error.message)
+      return
+    }
+
+    const response = data as FlyerInvokeResponse
+    onIterated?.(withVariants(response.item, response.variants))
+  }
+
   return (
     <div className="border border-border rounded-lg p-6 space-y-3 bg-surface">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-3">
         <span className="text-xs font-medium text-ink-muted uppercase tracking-wider">
           {TYPE_LABELS[item.type] ?? item.type}
         </span>
+        <div className="flex items-center gap-2">
+          {deleteError && <span className="text-xs text-red-500">{deleteError}</span>}
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleting}
+            aria-label="Delete"
+            className="text-xs text-ink-muted hover:text-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {deleting ? 'Deleting...' : 'Delete'}
+          </button>
+        </div>
       </div>
       <p className="text-xs text-ink-muted italic">{item.prompt}</p>
       {showCopyText && item.text_output && (
@@ -233,6 +414,18 @@ export default function ResultCard({ item, onIterated }: Props) {
       )}
       {item.image_url && (
         <div className="space-y-3">
+          {flyerVariants.map((variant) => (
+            <canvas
+              key={variant.id}
+              ref={(el) => {
+                if (el) canvasRefs.current.set(variant.id, el)
+                else canvasRefs.current.delete(variant.id)
+              }}
+              style={{ display: 'none' }}
+              aria-hidden="true"
+            />
+          ))}
+
           {previewImageUrl && <img src={previewImageUrl} alt={item.prompt} className="w-full rounded-lg" />}
 
           {flyerVariants.length > 1 && (
@@ -249,7 +442,7 @@ export default function ResultCard({ item, onIterated }: Props) {
                 >
                   {variant.image_url && (
                     <img
-                      src={variant.image_url}
+                      src={isOverlay ? (overlayDataUrls[variant.id] ?? variant.image_url) : variant.image_url}
                       alt={`Variant ${index + 1}`}
                       className="w-full aspect-square object-cover"
                     />
@@ -277,6 +470,58 @@ export default function ResultCard({ item, onIterated }: Props) {
                 className="text-xs font-medium text-ink-muted hover:text-ink transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {downloadingAll ? 'Preparing zip...' : 'Download all variants'}
+              </button>
+            </div>
+          )}
+
+          {isFlyerStructured && editedCopy && (
+            <div className="space-y-3 border-t border-border pt-3">
+              <p className="text-xs font-medium text-ink-muted uppercase tracking-wider">Copy</p>
+              <div className="space-y-1">
+                <label className="text-xs text-ink-muted">Headline</label>
+                <input
+                  value={editedCopy.headline}
+                  onChange={(e) => setEditedCopy({ ...editedCopy, headline: e.target.value })}
+                  aria-label="Headline"
+                  className="w-full border border-border rounded px-2 py-1 text-sm bg-canvas text-ink focus:outline-none focus:ring-1 focus:ring-purple-400"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-ink-muted">Tagline</label>
+                <input
+                  value={editedCopy.tagline}
+                  onChange={(e) => setEditedCopy({ ...editedCopy, tagline: e.target.value })}
+                  aria-label="Tagline"
+                  className="w-full border border-border rounded px-2 py-1 text-sm bg-canvas text-ink focus:outline-none focus:ring-1 focus:ring-purple-400"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-ink-muted">Body</label>
+                <textarea
+                  value={editedCopy.body}
+                  onChange={(e) => setEditedCopy({ ...editedCopy, body: e.target.value })}
+                  aria-label="Body"
+                  rows={2}
+                  className="w-full border border-border rounded px-2 py-1 text-sm bg-canvas text-ink focus:outline-none focus:ring-1 focus:ring-purple-400 resize-none"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-ink-muted">CTA</label>
+                <input
+                  value={editedCopy.cta}
+                  onChange={(e) => setEditedCopy({ ...editedCopy, cta: e.target.value })}
+                  aria-label="CTA"
+                  className="w-full border border-border rounded px-2 py-1 text-sm bg-canvas text-ink focus:outline-none focus:ring-1 focus:ring-purple-400"
+                />
+              </div>
+              {rerenderError && <p className="text-sm text-red-500">{rerenderError}</p>}
+              <button
+                type="button"
+                onClick={handleRerenderWithEdits}
+                disabled={rerenderLoading}
+                className="w-full border border-purple-400 text-purple-600 rounded-lg px-4 py-2.5 text-sm font-medium hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {rerenderLoading ? 'Re-rendering...' : 'Re-render with edits'}
               </button>
             </div>
           )}
