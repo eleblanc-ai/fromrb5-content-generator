@@ -200,8 +200,8 @@ describe('GenerateForm', () => {
         error: null,
       })
       .mockResolvedValueOnce({
-        data: null,
-        error: { message: 'API call failed' },
+        data: { error: 'API call failed' },
+        error: null,
       })
 
     render(<GenerateForm onResult={() => {}} />)

@@ -80,8 +80,9 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (err) {
+    // Return 200 so the client can read the error body (supabase-js swallows non-2xx bodies)
     return new Response(JSON.stringify({ error: (err as Error).message }), {
-      status: 500,
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }

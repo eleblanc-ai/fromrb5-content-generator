@@ -98,20 +98,19 @@ export default function GenerateForm({ onResult }: Props) {
       })
 
       if (fnError) {
-        const ctx = (fnError as unknown as { context?: Response }).context
-        let msg = fnError.message
-        try {
-          if (ctx) {
-            const body = (await ctx.clone().json()) as { error?: string }
-            msg = body?.error ?? msg
-          }
-        } catch { /* ignore */ }
-        setError(msg)
+        setError(fnError.message)
         setInterviewLoading(false)
         return
       }
 
-      const response = data as InterviewResponse
+      const body = data as InterviewResponse & { error?: string }
+      if (body.error) {
+        setError(body.error)
+        setInterviewLoading(false)
+        return
+      }
+
+      const response = body
       setMessages([{ role: 'assistant', text: response.message }])
       setHistory([{ role: 'assistant', content: response.message }])
       setInterviewLoading(false)
@@ -207,20 +206,19 @@ export default function GenerateForm({ onResult }: Props) {
     })
 
     if (fnError) {
-      const ctx = (fnError as unknown as { context?: Response }).context
-      let msg = fnError.message
-      try {
-        if (ctx) {
-          const body = (await ctx.clone().json()) as { error?: string }
-          msg = body?.error ?? msg
-        }
-      } catch { /* ignore */ }
-      setError(msg)
+      setError(fnError.message)
       setInterviewLoading(false)
       return
     }
 
-    const response = data as InterviewResponse
+    const body = data as InterviewResponse & { error?: string }
+    if (body.error) {
+      setError(body.error)
+      setInterviewLoading(false)
+      return
+    }
+
+    const response = body
     const assistantHistory: HistoryMessage = { role: 'assistant', content: response.message }
     setHistory([...updatedHistory, assistantHistory])
     setMessages([...newMessages, { role: 'assistant', text: response.message }])
