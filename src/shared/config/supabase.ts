@@ -5,6 +5,29 @@ import { env } from './env'
 
 export type ContentType = 'flyer_text' | 'image' | 'tea_writeup' | 'communication'
 
+export type FlyerFormat = 'instagram_post' | 'instagram_story'
+
+export type FlyerRenderMode = 'ai_composed' | 'overlay'
+
+export interface FlyerBrief {
+  campaignGoal: string
+  productName: string
+  keyDetails: string
+  cta: string
+  tone: string
+  colorVibe: string
+  fontVibe: string
+  formatConstraints: string
+  format: FlyerFormat
+  renderMode: FlyerRenderMode
+}
+
+export interface FlyerGenerationRequest {
+  type: 'flyer_text'
+  prompt: string
+  flyer: FlyerBrief
+}
+
 export interface ContentItem {
   id: string
   type: ContentType

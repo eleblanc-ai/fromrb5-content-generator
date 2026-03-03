@@ -11,13 +11,29 @@ const corsHeaders = {
 // account uses a different name (e.g. 'gemini-2.0-flash-preview-image-generation').
 const GEMINI_IMAGE_MODEL = 'gemini-3-pro-image-preview'
 
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  const chunkSize = 0x8000
+
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize)
+    binary += String.fromCharCode(...chunk)
+  }
+
+  return btoa(binary)
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const { prompt } = (await req.json()) as { prompt: string }
+    const { prompt, parentId, sourceImageUrl } = (await req.json()) as {
+      prompt: string
+      parentId?: string
+      sourceImageUrl?: string
+    }
 
     if (!prompt) {
       return new Response(JSON.stringify({ error: 'prompt is required' }), {
@@ -28,9 +44,45 @@ Deno.serve(async (req) => {
 
     const ai = new GoogleGenAI({ apiKey: Deno.env.get('GEMINI_API_KEY') ?? '' })
 
+    let contents:
+      | string
+      | {
+          role: 'user'
+          parts: Array<
+            { text: string } | { inlineData: { mimeType: string; data: string } }
+          >
+        }[] = prompt
+
+    if (sourceImageUrl) {
+      const sourceResponse = await fetch(sourceImageUrl)
+      if (!sourceResponse.ok) {
+        throw new Error('Failed to load source image for iteration')
+      }
+
+      const sourceArrayBuffer = await sourceResponse.arrayBuffer()
+      const sourceBytes = new Uint8Array(sourceArrayBuffer)
+      const sourceMimeType = sourceResponse.headers.get('content-type') ?? 'image/png'
+      const sourceImageBase64 = bytesToBase64(sourceBytes)
+
+      contents = [
+        {
+          role: 'user',
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType: sourceMimeType,
+                data: sourceImageBase64,
+              },
+            },
+          ],
+        },
+      ]
+    }
+
     const response = await ai.models.generateContent({
       model: GEMINI_IMAGE_MODEL,
-      contents: prompt,
+      contents,
       config: {
         responseModalities: ['IMAGE'],
       },
@@ -67,7 +119,12 @@ Deno.serve(async (req) => {
 
     const { data, error } = await supabase
       .from('content_items')
-      .insert({ type: 'image', prompt, image_url: publicUrl })
+      .insert({
+        type: 'image',
+        prompt,
+        image_url: publicUrl,
+        parent_id: parentId ?? null,
+      })
       .select()
       .single()
 

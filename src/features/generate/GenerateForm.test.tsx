@@ -15,22 +15,58 @@ vi.mock('../../shared/config/supabase', () => ({
 
 const mockTextItem = {
   id: '123',
-  type: 'tea_writeup' as const,
-  prompt: 'Write about green tea',
-  text_output: 'A delicate green tea with vegetal notes...',
+  type: 'flyer_text' as const,
+  prompt: 'Campaign goal: Drive weekend tea tasting signups',
+  text_output: JSON.stringify({
+    flyer: {
+      campaignGoal: 'Drive weekend tea tasting signups',
+      productName: 'Jasmine Green Reserve',
+      keyDetails: 'First flush jasmine pearls, floral aroma, small-batch packaging',
+      cta: 'Tap to order today',
+      tone: 'Premium and warm',
+      colorVibe: 'Lavender and charcoal',
+      fontVibe: 'Modern editorial sans',
+      formatConstraints: 'Keep safe margins for profile UI overlays',
+      format: 'instagram_story',
+      renderMode: 'overlay',
+    },
+    variantIndex: 1,
+  }),
   image_url: null,
   parent_id: null,
   created_at: '2026-02-22T00:00:00Z',
 }
 
-const mockImageItem = {
-  id: '456',
-  type: 'image' as const,
-  prompt: 'A tin of green tea on a wooden table',
-  text_output: null,
-  image_url: 'https://example.com/image.png',
-  parent_id: null,
-  created_at: '2026-02-22T00:00:00Z',
+async function fillRequiredFields() {
+  await userEvent.type(
+    screen.getByPlaceholderText('Drive weekend tea tasting signups'),
+    'Drive weekend tea tasting signups',
+  )
+  await userEvent.type(
+    screen.getByPlaceholderText('Jasmine Green Reserve'),
+    'Jasmine Green Reserve',
+  )
+  await userEvent.type(
+    screen.getByPlaceholderText('First flush jasmine pearls, floral aroma, small-batch packaging'),
+    'First flush jasmine pearls, floral aroma, small-batch packaging',
+  )
+  await userEvent.type(
+    screen.getByPlaceholderText('Tap to order today'),
+    'Tap to order today',
+  )
+  await userEvent.type(screen.getByPlaceholderText('Premium and warm'), 'Premium and warm')
+  await userEvent.type(
+    screen.getByPlaceholderText('Lavender and charcoal'),
+    'Lavender and charcoal',
+  )
+  await userEvent.type(
+    screen.getByPlaceholderText('Modern editorial sans'),
+    'Modern editorial sans',
+  )
+  await userEvent.type(
+    screen.getByPlaceholderText('Keep safe margins for profile UI overlays'),
+    'Keep safe margins for profile UI overlays',
+  )
 }
 
 describe('GenerateForm', () => {
@@ -38,74 +74,98 @@ describe('GenerateForm', () => {
     mockInvoke.mockReset()
   })
 
-  it('renders content type selector, prompt textarea, and button', () => {
+  it('renders flyer brief fields, selectors, and submit button', () => {
     render(<GenerateForm onResult={() => {}} />)
-    expect(screen.getByRole('combobox')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Describe what you need...')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Generate' })).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Drive weekend tea tasting signups')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Jasmine Green Reserve')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Tap to order today')).toBeInTheDocument()
+    expect(screen.getAllByRole('combobox')).toHaveLength(2)
+    expect(screen.getByRole('button', { name: 'Generate flyer brief' })).toBeInTheDocument()
   })
 
-  it('shows all content types including image', () => {
+  it('shows format and render mode options', () => {
     render(<GenerateForm onResult={() => {}} />)
-    expect(screen.getByRole('option', { name: 'Flyer copy' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Tea writeup' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Communication' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Image' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Instagram Post' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Instagram Story' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'AI composed' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Overlay' })).toBeInTheDocument()
   })
 
-  it('disables submit when prompt is empty', () => {
+  it('disables submit until required brief fields are filled', () => {
     render(<GenerateForm onResult={() => {}} />)
-    expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Generate flyer brief' })).toBeDisabled()
   })
 
-  it('calls generate-text and fires onResult for text types', async () => {
-    mockInvoke.mockResolvedValue({ data: { item: mockTextItem }, error: null })
+  it('submits flyer payload and fires onResult', async () => {
+    mockInvoke.mockResolvedValue({
+      data: {
+        item: mockTextItem,
+        variants: [
+          { id: 'v1', prompt: 'Variant 1', image_url: 'https://example.com/v1.png' },
+          { id: 'v2', prompt: 'Variant 2', image_url: 'https://example.com/v2.png' },
+          { id: 'v3', prompt: 'Variant 3', image_url: 'https://example.com/v3.png' },
+        ],
+      },
+      error: null,
+    })
     const onResult = vi.fn()
     render(<GenerateForm onResult={onResult} />)
 
-    await userEvent.type(
-      screen.getByPlaceholderText('Describe what you need...'),
-      'Write about green tea',
-    )
-    await userEvent.click(screen.getByRole('button', { name: 'Generate' }))
+    await fillRequiredFields()
+    await userEvent.selectOptions(screen.getAllByRole('combobox')[0], 'instagram_story')
+    await userEvent.selectOptions(screen.getAllByRole('combobox')[1], 'overlay')
+    await userEvent.click(screen.getByRole('button', { name: 'Generate flyer brief' }))
 
     await waitFor(() => {
-      expect(mockInvoke).toHaveBeenCalledWith('generate-text', {
-        body: { prompt: 'Write about green tea', type: 'tea_writeup' },
+      expect(mockInvoke).toHaveBeenCalledWith('generate-flyer', {
+        body: {
+          type: 'flyer_text',
+          prompt: [
+            'Campaign goal: Drive weekend tea tasting signups',
+            'Product name: Jasmine Green Reserve',
+            'Key details: First flush jasmine pearls, floral aroma, small-batch packaging',
+            'Call to action: Tap to order today',
+            'Tone: Premium and warm',
+            'Color vibe: Lavender and charcoal',
+            'Font vibe: Modern editorial sans',
+            'Format constraints: Keep safe margins for profile UI overlays',
+            'Target format: instagram_story',
+          ].join('\n'),
+          flyer: {
+            campaignGoal: 'Drive weekend tea tasting signups',
+            productName: 'Jasmine Green Reserve',
+            keyDetails: 'First flush jasmine pearls, floral aroma, small-batch packaging',
+            cta: 'Tap to order today',
+            tone: 'Premium and warm',
+            colorVibe: 'Lavender and charcoal',
+            fontVibe: 'Modern editorial sans',
+            formatConstraints: 'Keep safe margins for profile UI overlays',
+            format: 'instagram_story',
+            renderMode: 'overlay',
+          },
+        },
       })
-      expect(onResult).toHaveBeenCalledWith(mockTextItem)
+      expect(onResult).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: '123',
+          type: 'flyer_text',
+          prompt: 'Campaign goal: Drive weekend tea tasting signups',
+        }),
+      )
     })
-  })
 
-  it('calls generate-image when image type is selected', async () => {
-    mockInvoke.mockResolvedValue({ data: { item: mockImageItem }, error: null })
-    const onResult = vi.fn()
-    render(<GenerateForm onResult={onResult} />)
-
-    await userEvent.selectOptions(screen.getByRole('combobox'), 'image')
-    await userEvent.type(
-      screen.getByPlaceholderText('Describe what you need...'),
-      'A tin of green tea on a wooden table',
-    )
-    await userEvent.click(screen.getByRole('button', { name: 'Generate' }))
-
-    await waitFor(() => {
-      expect(mockInvoke).toHaveBeenCalledWith('generate-image', {
-        body: { prompt: 'A tin of green tea on a wooden table', type: 'image' },
-      })
-      expect(onResult).toHaveBeenCalledWith(mockImageItem)
-    })
+    const submittedItem = onResult.mock.calls[0][0] as { text_output: string }
+    const parsed = JSON.parse(submittedItem.text_output)
+    expect(parsed.variants).toHaveLength(3)
+    expect(parsed.variants[1].id).toBe('v2')
   })
 
   it('shows error message on failure', async () => {
     mockInvoke.mockResolvedValue({ data: null, error: { message: 'API call failed' } })
     render(<GenerateForm onResult={() => {}} />)
 
-    await userEvent.type(
-      screen.getByPlaceholderText('Describe what you need...'),
-      'Write about tea',
-    )
-    await userEvent.click(screen.getByRole('button', { name: 'Generate' }))
+    await fillRequiredFields()
+    await userEvent.click(screen.getByRole('button', { name: 'Generate flyer brief' }))
 
     await waitFor(() => {
       expect(screen.getByText('API call failed')).toBeInTheDocument()

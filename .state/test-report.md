@@ -51,3 +51,62 @@ Added Gemini image generation. The `generate-image` Edge Function calls Gemini, 
 | 16 | `src/features/generate/ResultCard.test.tsx` | does not render an image for text items | ✅ Pass | No `<img>` element for text-only items |
 
 ---
+
+## Slice 5: Content History + Copy/Download
+
+Added content history to the app shell and lightweight reuse actions on result cards. The app now loads previous `content_items` on start, prepends newly generated items, and exposes copy/download affordances by output type.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| 17 | `src/app/App.test.tsx` | loads and renders existing history items | ✅ Pass | Existing `content_items` are fetched and rendered in latest-first order |
+| 18 | `src/app/App.test.tsx` | prepends newly generated items to history | ✅ Pass | New generated item appears at top of history list |
+| 19 | `src/features/generate/ResultCard.test.tsx` | shows a copy action for text items only | ✅ Pass | Copy appears only for text outputs and download appears only for image outputs |
+| 20 | `src/features/generate/ResultCard.test.tsx` | copies text output when copy is clicked | ✅ Pass | Click invokes clipboard write with generated text |
+| 21 | `src/features/generate/ResultCard.test.tsx` | creates and clicks a download link for image items | ✅ Pass | Click triggers an anchor download for image output |
+
+---
+
+## Slice 6: Image Iteration
+
+Added true image refinement behavior by conditioning Gemini on the original image bytes plus follow-up prompt. Iteration requests now carry `parentId` and `sourceImageUrl`, and the backend persists lineage while generating a related derivative image.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| 22 | `src/features/generate/ResultCard.test.tsx` | iterates an image with parentId and returns the new item | ✅ Pass | Iteration payload includes source image context and parent linkage metadata |
+
+---
+
+## Slice 1 (Rescope): Flyer Brief Scaffold
+
+Replaced the generic generation form with a structured flyer brief scaffold and introduced typed request metadata for flyer format and render mode. This establishes the frontend contract for the flyer-focused rebuild.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| 23 | `src/features/generate/GenerateForm.test.tsx` | renders flyer brief fields, selectors, and submit button | ✅ Pass | Flyer brief scaffold UI renders |
+| 24 | `src/features/generate/GenerateForm.test.tsx` | shows format and render mode options | ✅ Pass | Instagram Post/Story + AI composed/Overlay options exist |
+| 25 | `src/features/generate/GenerateForm.test.tsx` | submits flyer payload and fires onResult | ✅ Pass | Structured flyer request payload is sent to function invoke |
+
+---
+
+## Slice 2 (Rescope): Actual Flyer Image Output
+
+Added end-to-end flyer image output through a new `generate-flyer` edge function and frontend wiring. Deployment target was corrected to the active project so invoke requests succeed.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| 26 | `src/features/generate/GenerateForm.test.tsx` | submits flyer payload and fires onResult | ✅ Pass | Form invokes `generate-flyer` with structured flyer payload |
+| 27 | `src/features/generate/ResultCard.test.tsx` | shows a copy action for text items only | ✅ Pass | Flyer image cards do not expose iterate-image controls |
+
+---
+
+## Slice 9: Export Package
+
+Added a "Download all variants" button to flyer result cards. When clicked, it fetches all variant images, bundles them into a zip using JSZip, and triggers a browser download. The button only appears for multi-variant flyer cards; single-image items are unaffected.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| 28 | `src/features/generate/ResultCard.test.tsx` | renders download all variants button for multi-variant flyer cards | ✅ Pass | Button appears when flyerVariants.length > 1 |
+| 29 | `src/features/generate/ResultCard.test.tsx` | does not render download all variants button for single-image items | ✅ Pass | Button absent for non-variant image items |
+| 30 | `src/features/generate/ResultCard.test.tsx` | fetches all variants and triggers zip download on download all click | ✅ Pass | Fetches each variant URL, creates zip blob, triggers anchor download |
+
+---
