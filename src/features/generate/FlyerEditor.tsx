@@ -233,13 +233,19 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
         layerStyles: capturedLayerStyles,
         showScrim: capturedShowScrim,
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(supabase as any)
-        .from('content_items')
-        .update({
-          text_output: JSON.stringify({ flyer: capturedFlyer, copy: capturedCopy, editorState }),
-        })
-        .eq('id', capturedItemId)
+      void (async () => {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any)
+            .from('content_items')
+            .update({
+              text_output: JSON.stringify({ flyer: capturedFlyer, copy: capturedCopy, editorState }),
+            })
+            .eq('id', capturedItemId)
+        } catch {
+          // save failures are silently ignored
+        }
+      })()
     }, 500)
   }, [layers, layerStyles, showScrim, copy]) // eslint-disable-line react-hooks/exhaustive-deps
 

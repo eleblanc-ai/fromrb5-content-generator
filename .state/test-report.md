@@ -319,3 +319,13 @@ Auto-saves layer positions, textarea widths, layer styles (font/size/color), scr
 | 4 | `FlyerEditor.test.tsx` | auto-saves editor state when a layer style changes | ✅ Pass | Debounced update called with editorState JSON after 500ms |
 
 ---
+
+## Slice 22: Fix editor state persistence
+
+Fixed a silent no-op in the FlyerEditor auto-save debounce: `@supabase/postgrest-js` queries are lazy and only execute on `.then()`, so the timeout was building a query chain that was never sent. Wrapped the call in an async IIFE with `await` and added a `try-catch` to prevent unhandled promise rejections from breaking the React UI. No new tests were added (existing mock-based tests pass but don't cover real HTTP dispatch); 61/61 existing tests pass.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| — | All | (no new tests) | ✅ Pass | All 61 existing tests continue to pass |
+
+---
