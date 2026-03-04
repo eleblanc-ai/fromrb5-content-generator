@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import FlyerEditor from './FlyerEditor'
 import type { ContentItem } from '../../shared/config/supabase'
@@ -229,5 +229,69 @@ describe('FlyerEditor', () => {
     const headline = screen.getByLabelText('Headline') as HTMLTextAreaElement
     expect(headline.style.minHeight).toBeTruthy()
     expect(headline.style.minHeight).toBe(headline.style.fontSize)
+  })
+
+  it('hides layer controls when no layer has been focused', () => {
+    render(<FlyerEditor item={mockFlyerItem} />)
+    expect(screen.queryByRole('button', { name: 'Increase font size' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Decrease font size' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: 'Font family' })).not.toBeInTheDocument()
+  })
+
+  it('shows layer controls in toolbar when a textarea is focused', async () => {
+    render(<FlyerEditor item={mockFlyerItem} />)
+    await userEvent.click(screen.getByLabelText('Headline'))
+    expect(screen.getByRole('button', { name: 'Increase font size' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Decrease font size' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Font family' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Text color')).toBeInTheDocument()
+  })
+
+  it('clicking A+ increases the font size of the focused layer', async () => {
+    render(<FlyerEditor item={mockFlyerItem} />)
+    const headline = screen.getByLabelText('Headline') as HTMLTextAreaElement
+    await userEvent.click(headline)
+    const before = parseFloat(headline.style.fontSize)
+    await userEvent.click(screen.getByRole('button', { name: 'Increase font size' }))
+    expect(parseFloat(headline.style.fontSize)).toBeCloseTo(before + 0.1, 1)
+  })
+
+  it('clicking A− decreases the font size of the focused layer', async () => {
+    render(<FlyerEditor item={mockFlyerItem} />)
+    const headline = screen.getByLabelText('Headline') as HTMLTextAreaElement
+    await userEvent.click(headline)
+    const before = parseFloat(headline.style.fontSize)
+    await userEvent.click(screen.getByRole('button', { name: 'Decrease font size' }))
+    expect(parseFloat(headline.style.fontSize)).toBeCloseTo(before - 0.1, 1)
+  })
+
+  it('font size does not go below 0.5rem', async () => {
+    render(<FlyerEditor item={mockFlyerItem} />)
+    const body = screen.getByLabelText('Body') as HTMLTextAreaElement
+    await userEvent.click(body)
+    const decBtn = screen.getByRole('button', { name: 'Decrease font size' })
+    // Click many times to try to push below the floor
+    for (let i = 0; i < 20; i++) {
+      await userEvent.click(decBtn)
+    }
+    expect(parseFloat(body.style.fontSize)).toBeGreaterThanOrEqual(0.5)
+  })
+
+  it('changing the font dropdown updates the layer font family', async () => {
+    render(<FlyerEditor item={mockFlyerItem} />)
+    const headline = screen.getByLabelText('Headline') as HTMLTextAreaElement
+    await userEvent.click(headline)
+    const select = screen.getByRole('combobox', { name: 'Font family' }) as HTMLSelectElement
+    await userEvent.selectOptions(select, 'Oswald')
+    expect(headline.style.fontFamily).toContain('Oswald')
+  })
+
+  it('changing the color input updates the layer text color', async () => {
+    render(<FlyerEditor item={mockFlyerItem} />)
+    const headline = screen.getByLabelText('Headline') as HTMLTextAreaElement
+    await userEvent.click(headline)
+    const colorInput = screen.getByLabelText('Text color') as HTMLInputElement
+    fireEvent.change(colorInput, { target: { value: '#ff0000' } })
+    expect(headline.style.color).toBe('rgb(255, 0, 0)')
   })
 })

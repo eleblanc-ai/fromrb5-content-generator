@@ -23,6 +23,12 @@ interface TextLayer {
   y: number
 }
 
+interface LayerStyle {
+  fontSizeRem: number
+  fontFamily: string
+  color: string
+}
+
 const DEFAULT_LAYERS: TextLayer[] = [
   { key: 'headline', label: 'Headline', x: 50, y: 36 },
   { key: 'tagline', label: 'Tagline', x: 50, y: 44 },
@@ -30,7 +36,18 @@ const DEFAULT_LAYERS: TextLayer[] = [
   { key: 'cta', label: 'CTA', x: 50, y: 63 },
 ]
 
-// Canvas pixel sizes for 1080px-wide output
+const AVAILABLE_FONTS = [
+  'Playfair Display',
+  'Cormorant Garamond',
+  'Oswald',
+  'Nunito',
+  'DM Sans',
+  'Lato',
+  'Montserrat',
+  'Open Sans',
+]
+
+// Canvas pixel sizes for 1080px-wide output (used as baseline for scaling)
 const CANVAS_FONT_SIZES_POST: Record<keyof FlyerCopyBlock, number> = {
   headline: 80,
   tagline: 48,
@@ -54,18 +71,13 @@ function parseMetadata(item: ContentItem): FlyerMetadata | null {
   }
 }
 
-function layerFontFamily(key: keyof FlyerCopyBlock, typo: FlyerTypography): string {
-  return key === 'headline' || key === 'cta' ? typo.headlineFont : typo.bodyFont
-}
-
-function layerFontSize(key: keyof FlyerCopyBlock, typo: FlyerTypography): string {
-  const map: Record<keyof FlyerCopyBlock, number> = {
-    headline: typo.headlineSizeRem,
-    tagline: typo.taglineSizeRem,
-    body: typo.bodySizeRem,
-    cta: typo.ctaSizeRem,
+function makeLayerStyles(typo: FlyerTypography): Record<keyof FlyerCopyBlock, LayerStyle> {
+  return {
+    headline: { fontSizeRem: typo.headlineSizeRem, fontFamily: typo.headlineFont, color: '#ffffff' },
+    tagline: { fontSizeRem: typo.taglineSizeRem, fontFamily: typo.bodyFont, color: '#ffffff' },
+    body: { fontSizeRem: typo.bodySizeRem, fontFamily: typo.bodyFont, color: '#ffffff' },
+    cta: { fontSizeRem: typo.ctaSizeRem, fontFamily: typo.headlineFont, color: '#ffffff' },
   }
-  return `${map[key]}rem`
 }
 
 function layerFontWeight(key: keyof FlyerCopyBlock, typo: FlyerTypography): number {
@@ -82,8 +94,23 @@ function injectGoogleFonts(typography: FlyerTypography) {
   document.head.appendChild(link)
 }
 
+function injectSingleFont(fontFamily: string) {
+  const id = `gf-single-${fontFamily.replace(/\s+/g, '-')}`
+  if (document.getElementById(id)) return
+  const link = document.createElement('link')
+  link.id = id
+  link.rel = 'stylesheet'
+  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontFamily)}:ital,wght@0,400;0,700&display=swap`
+  document.head.appendChild(link)
+}
+
 export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: Props) {
   const metadata = useMemo(() => parseMetadata(item), [item])
+
+  const typography = useMemo(
+    () => getFlyerTypography(metadata?.flyer?.fontVibe ?? ''),
+    [metadata?.flyer?.fontVibe],
+  )
 
   const [copy, setCopy] = useState<FlyerCopyBlock | null>(metadata?.copy ?? null)
   const [layers, setLayers] = useState<TextLayer[]>(DEFAULT_LAYERS.map((l) => ({ ...l })))
@@ -93,6 +120,10 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
   const [regenerateError, setRegenerateError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [selectedLayer, setSelectedLayer] = useState<keyof FlyerCopyBlock | null>(null)
+  const [layerStyles, setLayerStyles] = useState<Record<keyof FlyerCopyBlock, LayerStyle>>(
+    () => makeLayerStyles(typography),
+  )
 
   const containerRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef<{
@@ -103,21 +134,19 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
     origY: number
   } | null>(null)
 
-  const typography = useMemo(
-    () => getFlyerTypography(metadata?.flyer?.fontVibe ?? ''),
-    [metadata?.flyer?.fontVibe],
-  )
-
-  // Load Google Fonts whenever the typography pairing changes
+  // Load Google Fonts whenever the typography pairing changes; preload all available fonts
   useEffect(() => {
     injectGoogleFonts(typography)
+    AVAILABLE_FONTS.forEach(injectSingleFont)
   }, [typography])
 
   useEffect(() => {
     setCopy(metadata?.copy ?? null)
     setBgUrl(item.image_url)
     setLayers(DEFAULT_LAYERS.map((l) => ({ ...l })))
-  }, [item.id, metadata?.copy, item.image_url])
+    setLayerStyles(makeLayerStyles(typography))
+    setSelectedLayer(null)
+  }, [item.id, metadata?.copy, item.image_url, typography])
 
   useEffect(() => {
     const container = containerRef.current
@@ -129,6 +158,20 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
       }
     })
   }, [copy])
+
+  function updateLayerStyle(key: keyof FlyerCopyBlock, changes: Partial<LayerStyle>) {
+    setLayerStyles((prev) => ({ ...prev, [key]: { ...prev[key], ...changes } }))
+  }
+
+  function handleFontSizeChange(key: keyof FlyerCopyBlock, delta: number) {
+    setLayerStyles((prev) => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        fontSizeRem: Math.max(0.5, Math.round((prev[key].fontSizeRem + delta) * 10) / 10),
+      },
+    }))
+  }
 
   function handleDragStart(key: string, e: React.MouseEvent) {
     e.preventDefault()
@@ -218,7 +261,13 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
     const format: FlyerFormat = metadata?.flyer?.format ?? 'instagram_post'
     const width = 1080
     const height = format === 'instagram_story' ? 1920 : 1080
-    const fontSizes = format === 'instagram_story' ? CANVAS_FONT_SIZES_STORY : CANVAS_FONT_SIZES_POST
+    const baseCanvasSizes = format === 'instagram_story' ? CANVAS_FONT_SIZES_STORY : CANVAS_FONT_SIZES_POST
+    const defaultRems: Record<keyof FlyerCopyBlock, number> = {
+      headline: typography.headlineSizeRem,
+      tagline: typography.taglineSizeRem,
+      body: typography.bodySizeRem,
+      cta: typography.ctaSizeRem,
+    }
 
     const canvas = document.createElement('canvas')
     canvas.width = width
@@ -242,10 +291,11 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
         if (!text) continue
         const px = (layer.x / 100) * width
         const py = (layer.y / 100) * height
-        const fontSize = fontSizes[layer.key]
-        const fontFamily = layerFontFamily(layer.key, typography)
+        const ls = layerStyles[layer.key]
+        const scaleFactor = ls.fontSizeRem / defaultRems[layer.key]
+        const fontSize = Math.round(baseCanvasSizes[layer.key] * scaleFactor)
         const weight = layerFontWeight(layer.key, typography)
-        ctx.font = `${weight} ${fontSize}px "${fontFamily}", serif`
+        ctx.font = `${weight} ${fontSize}px "${ls.fontFamily}", serif`
 
         if (showScrim) {
           const metrics = ctx.measureText(text)
@@ -261,7 +311,7 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
 
         ctx.shadowColor = showScrim ? 'transparent' : 'rgba(0,0,0,0.65)'
         ctx.shadowBlur = showScrim ? 0 : 14
-        ctx.fillStyle = '#ffffff'
+        ctx.fillStyle = ls.color
         ctx.fillText(text, px, py)
         ctx.shadowBlur = 0
       }
@@ -288,9 +338,54 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
 
   return (
     <div className="border border-border rounded-lg overflow-hidden bg-surface">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <span className="text-xs font-medium text-ink-muted uppercase tracking-wider">Flyer editor</span>
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border gap-3">
+        <span className="text-xs font-medium text-ink-muted uppercase tracking-wider shrink-0">Flyer editor</span>
+
+        {selectedLayer && (
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <span className="text-xs text-ink capitalize shrink-0">{selectedLayer}</span>
+            <select
+              value={layerStyles[selectedLayer].fontFamily}
+              onChange={(e) => {
+                injectSingleFont(e.target.value)
+                updateLayerStyle(selectedLayer, { fontFamily: e.target.value })
+              }}
+              aria-label="Font family"
+              className="text-xs border border-border rounded px-1 py-0.5 bg-canvas text-ink min-w-0 truncate"
+            >
+              {AVAILABLE_FONTS.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => handleFontSizeChange(selectedLayer, -0.1)}
+              aria-label="Decrease font size"
+              className="text-xs text-ink-muted hover:text-ink transition-colors shrink-0"
+            >
+              A−
+            </button>
+            <button
+              type="button"
+              onClick={() => handleFontSizeChange(selectedLayer, 0.1)}
+              aria-label="Increase font size"
+              className="text-xs text-ink-muted hover:text-ink transition-colors shrink-0"
+            >
+              A+
+            </button>
+            <input
+              type="color"
+              value={layerStyles[selectedLayer].color}
+              onChange={(e) => updateLayerStyle(selectedLayer, { color: e.target.value })}
+              aria-label="Text color"
+              className="w-5 h-5 border-0 p-0 cursor-pointer rounded shrink-0"
+            />
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 shrink-0">
           {deleteError && <span className="text-xs text-red-500">{deleteError}</span>}
           <button
             type="button"
@@ -358,16 +453,18 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
                   el.style.height = `${el.scrollHeight}px`
                 }
               }}
+              onFocus={() => setSelectedLayer(layer.key)}
               onMouseDown={(e) => e.stopPropagation()}
               aria-label={layer.label}
               data-layer-key={layer.key}
-              className="bg-transparent border-none outline-none text-white text-center resize-none min-w-[120px] max-w-[280px]"
+              className="bg-transparent border-none outline-none text-center resize-none min-w-[120px] max-w-[280px]"
               style={{
                 textShadow: showScrim ? 'none' : '0 1px 4px rgba(0,0,0,0.8)',
-                fontFamily: `"${layerFontFamily(layer.key, typography)}", serif`,
-                fontSize: layerFontSize(layer.key, typography),
+                fontFamily: `"${layerStyles[layer.key].fontFamily}", serif`,
+                fontSize: `${layerStyles[layer.key].fontSizeRem}rem`,
                 fontWeight: layerFontWeight(layer.key, typography),
-                minHeight: layerFontSize(layer.key, typography),
+                color: layerStyles[layer.key].color,
+                minHeight: `${layerStyles[layer.key].fontSizeRem}rem`,
                 lineHeight: '1',
                 padding: 0,
               }}

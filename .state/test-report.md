@@ -272,3 +272,19 @@ Fixed text still getting cut off after Slice 16. The `height: layerFontSize(...)
 | 1 | `FlyerEditor.test.tsx` | textarea min-height matches its font size | ✅ Pass | Textarea minHeight equals fontSize — text can grow beyond the floor |
 
 ---
+
+## Slice 18: Per-layer style controls
+
+Added per-layer style controls to the FlyerEditor toolbar. When a textarea is focused, the header bar shows the layer name, a font family dropdown (8 options), A−/A+ size buttons (±0.1rem, floor 0.5rem), and a free color picker. All 8 fonts are preloaded on mount to prevent serif fallback flash. Canvas download uses per-layer styles with proportional scaling.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| 1 | `FlyerEditor.test.tsx` | hides layer controls when no layer has been focused | ✅ Pass | Font/size/color controls absent until a textarea is focused |
+| 2 | `FlyerEditor.test.tsx` | shows layer controls in toolbar when a textarea is focused | ✅ Pass | Font dropdown, A+/A−, and color picker appear after focus |
+| 3 | `FlyerEditor.test.tsx` | clicking A+ increases the font size of the focused layer | ✅ Pass | A+ increments fontSizeRem by 0.1 |
+| 4 | `FlyerEditor.test.tsx` | clicking A− decreases the font size of the focused layer | ✅ Pass | A− decrements fontSizeRem by 0.1 |
+| 5 | `FlyerEditor.test.tsx` | font size does not go below 0.5rem | ✅ Pass | Floor enforced — repeated A− clicks can't go below 0.5 |
+| 6 | `FlyerEditor.test.tsx` | changing the font dropdown updates the layer font family | ✅ Pass | Selecting Oswald updates textarea fontFamily to Oswald |
+| 7 | `FlyerEditor.test.tsx` | changing the color input updates the layer text color | ✅ Pass | Color input change updates textarea color inline style |
+
+---
