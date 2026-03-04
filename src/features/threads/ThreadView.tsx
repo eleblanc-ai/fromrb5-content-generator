@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../shared/config/supabase'
 import type { ContentItem, FlyerBrief, FlyerGenerationRequest, Message, Thread } from '../../shared/config/supabase'
-import { ResultCard } from '../generate'
+import { FlyerEditor } from '../generate'
 
 interface Props {
   thread: Thread
@@ -151,7 +151,7 @@ export default function ThreadView({
         {loading ? (
           <p className="text-sm text-ink-muted">Loading…</p>
         ) : item ? (
-          <ResultCard
+          <FlyerEditor
             item={item}
             onIterated={onItemChanged}
             onDeleted={onThreadDeleted}

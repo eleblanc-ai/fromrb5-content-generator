@@ -30,8 +30,8 @@ vi.mock('../../shared/config/supabase', () => ({
 }))
 
 vi.mock('../generate', () => ({
-  ResultCard: ({ item, onDeleted }: { item: ContentItem; onDeleted?: () => void }) => (
-    <div data-testid="result-card">
+  FlyerEditor: ({ item, onDeleted }: { item: ContentItem; onDeleted?: () => void }) => (
+    <div data-testid="flyer-editor">
       <span data-testid="result-id">{item.id}</span>
       <button onClick={onDeleted}>Delete thread</button>
     </div>

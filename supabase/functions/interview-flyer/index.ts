@@ -17,7 +17,6 @@ You need to collect EXACTLY these fields:
 - fontVibe: typography direction (e.g. "modern editorial sans")
 - formatConstraints: any layout or safe-zone constraints (default to "none" if not mentioned)
 - format: MUST be exactly "instagram_post" or "instagram_story"
-- renderMode: MUST be exactly "ai_composed" or "overlay" (ai_composed = text baked into image; overlay = clean background image with text layered on top)
 
 Guidelines:
 - Ask follow-up questions naturally. You can collect multiple fields per exchange if the user gives rich answers.
@@ -26,7 +25,7 @@ Guidelines:
 
 ALWAYS respond with ONLY valid JSON — no extra text, no markdown fences:
 - While still collecting: {"message": "your next question", "complete": false}
-- When you have all fields: {"message": "Perfect, I have everything I need — generating your flyer now!", "complete": true, "brief": {"productName": "...", "campaignGoal": "...", "keyDetails": "...", "cta": "...", "tone": "...", "colorVibe": "...", "fontVibe": "...", "formatConstraints": "...", "format": "instagram_post", "renderMode": "ai_composed"}}`
+- When you have all fields: {"message": "Perfect, I have everything I need — generating your flyer now!", "complete": true, "brief": {"productName": "...", "campaignGoal": "...", "keyDetails": "...", "cta": "...", "tone": "...", "colorVibe": "...", "fontVibe": "...", "formatConstraints": "...", "format": "instagram_post", "renderMode": "overlay"}}`
 
 interface HistoryMessage {
   role: 'user' | 'assistant'

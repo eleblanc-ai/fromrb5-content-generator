@@ -8,6 +8,7 @@ const corsHeaders = {
 }
 
 const GEMINI_IMAGE_MODEL = 'gemini-3-pro-image-preview'
+const GEMINI_FALLBACK_MODEL = 'gemini-2.5-flash-image'
 
 type FlyerFormat = 'instagram_post' | 'instagram_story'
 type FlyerRenderMode = 'ai_composed' | 'overlay'
@@ -96,41 +97,20 @@ function getFormatInstructions(format: FlyerFormat) {
   return 'Canvas: 1080x1080 square composition for Instagram Post. Keep balanced hierarchy and center-safe margins.'
 }
 
-function buildFlyerImagePrompt(flyer: FlyerBrief, copy: FlyerCopyBlock, refinementMessage?: string): string {
+function buildFlyerImagePrompt(flyer: FlyerBrief, refinementMessage?: string): string {
   const formatInstructions = getFormatInstructions(flyer.format)
-
-  const copyText = [
-    `Headline: "${copy.headline}"`,
-    `Tagline: "${copy.tagline}"`,
-    `Body: "${copy.body}"`,
-    `Call to action: "${copy.cta}"`,
-  ].join('\n')
-
   const refinementSuffix = refinementMessage ? `\nRefinement request: "${refinementMessage}"` : ''
 
-  if (flyer.renderMode === 'overlay') {
-    return [
-      'Create a background-only image for a premium tea brand flyer.',
-      'NO text, NO lettering, NO words, NO typography of any kind in the image.',
-      'Pure visual composition only — textures, gradients, product photography, botanical elements.',
-      'Leave the center area relatively clear and uncluttered to accommodate programmatic text overlay.',
-      formatInstructions,
-      `Color vibe: ${flyer.colorVibe}`,
-      `Constraints: ${flyer.formatConstraints}`,
-      'Design style: premium, calm, editorial tea brand aesthetic.',
-      'Output must be a text-free background image suitable for programmatic text overlay.',
-    ].join('\n') + refinementSuffix
-  }
-
   return [
-    'Create one complete, publish-ready marketing flyer image for a premium tea brand with text baked in.',
+    'Create a background-only image for a premium tea brand flyer.',
+    'NO text, NO lettering, NO words, NO typography of any kind in the image.',
+    'Pure visual composition only — textures, gradients, product photography, botanical elements.',
+    'Leave the center area relatively clear and uncluttered to accommodate text overlay.',
     formatInstructions,
-    copyText,
     `Color vibe: ${flyer.colorVibe}`,
-    `Font vibe: ${flyer.fontVibe}`,
     `Constraints: ${flyer.formatConstraints}`,
     'Design style: premium, calm, editorial tea brand aesthetic.',
-    'The final image must be legible for social posting.',
+    'Output must be a text-free background image suitable for programmatic text overlay.',
   ].join('\n') + refinementSuffix
 }
 
@@ -184,7 +164,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     )
 
-    const imagePrompt = buildFlyerImagePrompt(flyer, copy, refinementMessage)
+    const imagePrompt = buildFlyerImagePrompt(flyer, refinementMessage)
 
     const contents = sourceInlineData
       ? [
@@ -198,13 +178,27 @@ Deno.serve(async (req) => {
         ]
       : imagePrompt
 
-    const response = await ai.models.generateContent({
-      model: GEMINI_IMAGE_MODEL,
-      contents,
-      config: {
-        responseModalities: ['IMAGE'],
-      },
-    })
+    const generateWithFallback = async () => {
+      try {
+        return await ai.models.generateContent({
+          model: GEMINI_IMAGE_MODEL,
+          contents,
+          config: { responseModalities: ['IMAGE'] },
+        })
+      } catch (err) {
+        const msg = (err as Error).message ?? ''
+        if (msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('high demand')) {
+          return await ai.models.generateContent({
+            model: GEMINI_FALLBACK_MODEL,
+            contents,
+            config: { responseModalities: ['IMAGE'] },
+          })
+        }
+        throw err
+      }
+    }
+
+    const response = await generateWithFallback()
 
     const imagePart = response.candidates?.[0]?.content?.parts?.find((p) => p.inlineData)
     if (!imagePart?.inlineData) {

@@ -221,7 +221,14 @@ export default function GenerateForm({ onResult, onThreadStarted, resumeThread, 
     setGenerating(false)
 
     if (fnError) {
-      setError(fnError.message)
+      let errorMessage = fnError.message
+      if ('context' in fnError && fnError.context instanceof Response) {
+        try {
+          const body = await (fnError.context as Response).json() as { error?: string }
+          if (body?.error) errorMessage = body.error
+        } catch { /* fall through to generic message */ }
+      }
+      setError(errorMessage)
       return
     }
 

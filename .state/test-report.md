@@ -176,6 +176,26 @@ Delete threads, save interview history to DB (early + incremental), display mess
 
 ---
 
+## Slice 14: Design Editor
+
+Replaced the ResultCard flyer display with a FlyerEditor design editor. AI always returns a clean background image + structured copy. Frontend renders 4 draggable/editable text layers over the background, with "Regenerate art" (re-calls generate-flyer without re-interviewing) and Canvas 2D download at full resolution. ResultCard and its tests deleted; 33 tests total after removal.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| 1 | `FlyerEditor.test.tsx` | renders the flyer canvas area | ✅ Pass | Canvas container present in DOM |
+| 2 | `FlyerEditor.test.tsx` | renders the background image | ✅ Pass | `<img>` has correct background URL |
+| 3 | `FlyerEditor.test.tsx` | shows 4 editable text layers with correct copy | ✅ Pass | All 4 textareas pre-populated from metadata |
+| 4 | `FlyerEditor.test.tsx` | allows editing text layers | ✅ Pass | Typing changes textarea value |
+| 5 | `FlyerEditor.test.tsx` | shows Regenerate art and Download buttons | ✅ Pass | Both action buttons present |
+| 6 | `FlyerEditor.test.tsx` | calls generate-flyer with correct body when Regenerate art is clicked | ✅ Pass | Invokes generate-flyer with flyer brief + parentId |
+| 7 | `FlyerEditor.test.tsx` | shows loading state while regenerating | ✅ Pass | Button shows "Generating..." and is disabled |
+| 8 | `FlyerEditor.test.tsx` | shows an error when regenerate fails | ✅ Pass | Error message appears on failure |
+| 9 | `FlyerEditor.test.tsx` | shows a delete button | ✅ Pass | Delete button present |
+| 10 | `FlyerEditor.test.tsx` | calls supabase delete and onDeleted when Delete is clicked | ✅ Pass | Correct row deleted; onDeleted fires |
+| 11 | `FlyerEditor.test.tsx` | shows fallback when item has no flyer data | ✅ Pass | "No flyer data available." message shown |
+
+---
+
 ## AI Interview + Typewriter
 
 Replaced the scripted 10-step flyer brief form with an AI-driven conversational interview. `interview-flyer` edge function calls Claude with a JSON-mode system prompt; `GenerateForm` drives the chat turn-by-turn and auto-generates on `complete: true`. Added client-side typewriter animation and typing dots.
@@ -188,5 +208,23 @@ Replaced the scripted 10-step flyer brief form with an AI-driven conversational 
 | — | `src/features/generate/GenerateForm.test.tsx` | auto-generates and fires onResult when interview completes | ✅ Pass | `complete: true` triggers generate-flyer and fires onResult |
 | — | `src/features/generate/GenerateForm.test.tsx` | shows generating state while flyer is being created | ✅ Pass | "Generating your flyer..." shown while function is pending |
 | — | `src/features/generate/GenerateForm.test.tsx` | shows error message when interview call fails | ✅ Pass | Application-level error from `data.error` displayed |
+
+---
+
+## Slice 13: Thread Interactions
+
+Full thread lifecycle: delete threads from sidebar, persist interview history to DB incrementally, display Q&A history on thread open, resume in-progress interviews without re-calling the AI, refinement chat input in ThreadView, and multiline auto-resizing textarea.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| 1 | `src/app/App.test.tsx` | removes thread from sidebar when delete confirmed | ✅ Pass | Delete → confirm → thread removed from DOM |
+| 2 | `src/app/App.test.tsx` | shows GenerateForm when clicking an in-progress thread with no flyer | ✅ Pass | Thread with no flyer_item_id → GenerateForm with resume props |
+| 3 | `src/features/threads/ThreadView.test.tsx` | displays message history on mount | ✅ Pass | Messages from DB appear as chat bubbles |
+| 4 | `src/features/threads/ThreadView.test.tsx` | shows refinement input when item is present | ✅ Pass | Refinement textarea + button renders |
+| 5 | `src/features/threads/ThreadView.test.tsx` | hides refinement input when item is null | ✅ Pass | No refinement UI when no flyer |
+| 6 | `src/features/threads/ThreadView.test.tsx` | submits refinement and shows generating state | ✅ Pass | Submit calls generate-flyer with refinementMessage |
+| 7 | `src/features/threads/ThreadView.test.tsx` | does not show refinement input during generation | ✅ Pass | UI hides input while generating |
+| 8 | `src/features/generate/GenerateForm.test.tsx` | creates thread on first user message and notifies onThreadStarted | ✅ Pass | Thread created + onThreadStarted called on first submit |
+| 9 | `src/features/generate/GenerateForm.test.tsx` | restores conversation when resume props are provided without calling interview-flyer | ✅ Pass | Resume props restore messages; interview-flyer not called on mount |
 
 ---
