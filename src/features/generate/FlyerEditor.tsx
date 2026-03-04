@@ -47,21 +47,6 @@ const AVAILABLE_FONTS = [
   'Open Sans',
 ]
 
-// Canvas pixel sizes for 1080px-wide output (used as baseline for scaling)
-const CANVAS_FONT_SIZES_POST: Record<keyof FlyerCopyBlock, number> = {
-  headline: 80,
-  tagline: 48,
-  body: 38,
-  cta: 58,
-}
-
-const CANVAS_FONT_SIZES_STORY: Record<keyof FlyerCopyBlock, number> = {
-  headline: 90,
-  tagline: 54,
-  body: 44,
-  cta: 66,
-}
-
 function parseMetadata(item: ContentItem): FlyerMetadata | null {
   if (item.type !== 'flyer_text' || !item.text_output) return null
   try {
@@ -287,13 +272,6 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
     const format: FlyerFormat = metadata?.flyer?.format ?? 'instagram_post'
     const width = 1080
     const height = format === 'instagram_story' ? 1920 : 1080
-    const baseCanvasSizes = format === 'instagram_story' ? CANVAS_FONT_SIZES_STORY : CANVAS_FONT_SIZES_POST
-    const defaultRems: Record<keyof FlyerCopyBlock, number> = {
-      headline: typography.headlineSizeRem,
-      tagline: typography.taglineSizeRem,
-      body: typography.bodySizeRem,
-      cta: typography.ctaSizeRem,
-    }
 
     const canvas = document.createElement('canvas')
     canvas.width = width
@@ -314,6 +292,7 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
       ctx.textBaseline = 'middle'
 
       const containerW = containerEl?.getBoundingClientRect().width ?? width
+      const scaleToCanvas = width / containerW
 
       for (const layer of layers) {
         const text = copy[layer.key]
@@ -321,13 +300,15 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
         const px = (layer.x / 100) * width
         const py = (layer.y / 100) * height
         const ls = layerStyles[layer.key]
-        const scaleFactor = ls.fontSizeRem / defaultRems[layer.key]
-        const fontSize = Math.round(baseCanvasSizes[layer.key] * scaleFactor)
         const weight = layerFontWeight(layer.key, typography)
+
+        // Derive canvas font size from the textarea's actual rendered px size, scaled to canvas
+        const ta = containerEl?.querySelector<HTMLTextAreaElement>(`[data-layer-key="${layer.key}"]`)
+        const editorFontPx = ta ? parseFloat(getComputedStyle(ta).fontSize) : ls.fontSizeRem * 16
+        const fontSize = Math.round(editorFontPx * scaleToCanvas)
         ctx.font = `${weight} ${fontSize}px "${ls.fontFamily}", serif`
 
         // Scale the textarea's rendered width to canvas coordinates for WYSIWYG wrapping
-        const ta = containerEl?.querySelector<HTMLTextAreaElement>(`[data-layer-key="${layer.key}"]`)
         const taWidth = ta ? ta.getBoundingClientRect().width : containerW * 0.3
         const canvasMaxWidth = (taWidth / containerW) * width
 

@@ -298,3 +298,11 @@ Enabled native both-axis textarea resize (root cause: Tailwind preflight sets `r
 | 1 | `FlyerEditor.test.tsx` | textarea is resizable (resize class set to both axes) | ✅ Pass | `resize` class present, `resize-none` absent — both-axis native resize enabled |
 
 ---
+
+## Slice 20: WYSIWYG font size in download
+
+Replaced hardcoded `CANVAS_FONT_SIZES_POST/STORY` tables with DOM-measured font sizes. At download time, `getComputedStyle(ta).fontSize` gives the textarea's actual rendered px size; multiplied by `1080 / containerWidth` gives the WYSIWYG canvas font size. Removed the two size-table constants and the per-download `defaultRems` computation.
+
+No new tests — `getComputedStyle` and canvas APIs are unavailable in JSDOM; all 57 existing tests continue to pass.
+
+---
