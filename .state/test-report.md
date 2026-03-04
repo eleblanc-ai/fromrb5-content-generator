@@ -306,3 +306,16 @@ Replaced hardcoded `CANVAS_FONT_SIZES_POST/STORY` tables with DOM-measured font 
 No new tests — `getComputedStyle` and canvas APIs are unavailable in JSDOM; all 57 existing tests continue to pass.
 
 ---
+
+## Slice 21: Persist Editor State
+
+Auto-saves layer positions, textarea widths, layer styles (font/size/color), scrim toggle, and copy edits to `content_items.text_output` (debounced 500ms). All editor customizations restore on load from the saved `editorState` field in the metadata JSON.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| 1 | `FlyerEditor.test.tsx` | restores layer positions from saved editor state | ✅ Pass | Layers rendered at stored x/y on load |
+| 2 | `FlyerEditor.test.tsx` | restores layer styles from saved editor state | ✅ Pass | Font family and color restored from editorState |
+| 3 | `FlyerEditor.test.tsx` | restores scrim off state from saved editor state | ✅ Pass | showScrim: false restores scrim-off UI on load |
+| 4 | `FlyerEditor.test.tsx` | auto-saves editor state when a layer style changes | ✅ Pass | Debounced update called with editorState JSON after 500ms |
+
+---

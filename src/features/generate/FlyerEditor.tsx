@@ -14,6 +14,7 @@ interface Props {
 interface FlyerMetadata {
   flyer?: FlyerBrief
   copy?: FlyerCopyBlock
+  editorState?: EditorState
 }
 
 interface TextLayer {
@@ -27,6 +28,19 @@ interface LayerStyle {
   fontSizeRem: number
   fontFamily: string
   color: string
+}
+
+interface SavedLayer {
+  key: keyof FlyerCopyBlock
+  x: number
+  y: number
+  width: number
+}
+
+interface EditorState {
+  layers: SavedLayer[]
+  layerStyles: Record<keyof FlyerCopyBlock, LayerStyle>
+  showScrim: boolean
 }
 
 const DEFAULT_LAYERS: TextLayer[] = [
@@ -135,6 +149,8 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
     origX: number
     origY: number
   } | null>(null)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isInitializingRef = useRef(true)
 
   // Load Google Fonts whenever the typography pairing changes; preload all available fonts
   useEffect(() => {
@@ -143,12 +159,32 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
   }, [typography])
 
   useEffect(() => {
+    isInitializingRef.current = true
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
     setCopy(metadata?.copy ?? null)
     setBgUrl(item.image_url)
-    setLayers(DEFAULT_LAYERS.map((l) => ({ ...l })))
-    setLayerStyles(makeLayerStyles(typography))
+    const saved = metadata?.editorState
+    if (saved) {
+      setLayers(
+        saved.layers.map((sl) => ({
+          key: sl.key,
+          label: DEFAULT_LAYERS.find((d) => d.key === sl.key)?.label ?? String(sl.key),
+          x: sl.x,
+          y: sl.y,
+        })),
+      )
+      setLayerStyles(saved.layerStyles)
+      setShowScrim(saved.showScrim)
+    } else {
+      setLayers(DEFAULT_LAYERS.map((l) => ({ ...l })))
+      setLayerStyles(makeLayerStyles(typography))
+      setShowScrim(true)
+    }
     setSelectedLayer(null)
-  }, [item.id, metadata?.copy, item.image_url, typography])
+  }, [item.id, metadata?.copy, item.image_url, typography, metadata?.editorState])
 
   useEffect(() => {
     const container = containerRef.current
@@ -161,14 +197,51 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
     })
   }, [copy])
 
-  // Reset textarea widths to default when the item changes (DOM-only; not in style prop so user drags persist)
+  // Restore textarea widths from saved editorState, or default to 280px (DOM-only; not in style prop so user drags persist)
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
+    const saved = metadata?.editorState
     container.querySelectorAll<HTMLTextAreaElement>('[data-layer-key]').forEach((ta) => {
-      ta.style.width = '280px'
+      const key = ta.getAttribute('data-layer-key') as keyof FlyerCopyBlock
+      const savedLayer = saved?.layers.find((l) => l.key === key)
+      ta.style.width = savedLayer ? `${savedLayer.width}px` : '280px'
     })
-  }, [item.id])
+  }, [item.id, metadata?.editorState])
+
+  // Debounced auto-save: persist editor state to content_items.text_output 500ms after any change
+  useEffect(() => {
+    if (isInitializingRef.current) {
+      isInitializingRef.current = false
+      return
+    }
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    const capturedLayers = layers
+    const capturedLayerStyles = layerStyles
+    const capturedShowScrim = showScrim
+    const capturedCopy = copy
+    const capturedFlyer = metadata?.flyer
+    const capturedItemId = item.id
+    saveTimerRef.current = setTimeout(() => {
+      const container = containerRef.current
+      const editorState: EditorState = {
+        layers: capturedLayers.map((l) => {
+          const ta = container?.querySelector<HTMLTextAreaElement>(`[data-layer-key="${l.key}"]`)
+          const width = ta ? ta.getBoundingClientRect().width || 280 : 280
+          return { key: l.key, x: l.x, y: l.y, width }
+        }),
+        layerStyles: capturedLayerStyles,
+        showScrim: capturedShowScrim,
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(supabase as any)
+        .from('content_items')
+        .update({
+          text_output: JSON.stringify({ flyer: capturedFlyer, copy: capturedCopy, editorState }),
+        })
+        .eq('id', capturedItemId)
+    }, 500)
+  }, [layers, layerStyles, showScrim, copy]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function updateLayerStyle(key: keyof FlyerCopyBlock, changes: Partial<LayerStyle>) {
     setLayerStyles((prev) => ({ ...prev, [key]: { ...prev[key], ...changes } }))

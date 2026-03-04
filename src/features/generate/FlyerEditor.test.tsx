@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import FlyerEditor from './FlyerEditor'
 import type { ContentItem } from '../../shared/config/supabase'
@@ -7,7 +7,9 @@ import type { ContentItem } from '../../shared/config/supabase'
 const mockInvoke = vi.hoisted(() => vi.fn())
 const mockDeleteEq = vi.hoisted(() => vi.fn().mockResolvedValue({ error: null }))
 const mockDelete = vi.hoisted(() => vi.fn(() => ({ eq: mockDeleteEq })))
-const mockFrom = vi.hoisted(() => vi.fn(() => ({ delete: mockDelete })))
+const mockUpdateEq = vi.hoisted(() => vi.fn().mockResolvedValue({ error: null }))
+const mockUpdate = vi.hoisted(() => vi.fn(() => ({ eq: mockUpdateEq })))
+const mockFrom = vi.hoisted(() => vi.fn(() => ({ delete: mockDelete, update: mockUpdate })))
 
 vi.mock('../../shared/config/supabase', () => ({
   supabase: {
@@ -48,6 +50,28 @@ const mockFlyerItem: ContentItem = {
   created_at: '2026-03-04T10:00:00Z',
 }
 
+const mockSavedEditorState = {
+  layers: [
+    { key: 'headline', x: 25, y: 20, width: 350 },
+    { key: 'tagline', x: 50, y: 44, width: 280 },
+    { key: 'body', x: 50, y: 52, width: 280 },
+    { key: 'cta', x: 75, y: 70, width: 200 },
+  ],
+  layerStyles: {
+    headline: { fontSizeRem: 2.5, fontFamily: 'Oswald', color: '#ff0000' },
+    tagline: { fontSizeRem: 1.2, fontFamily: 'Lato', color: '#ffffff' },
+    body: { fontSizeRem: 0.9, fontFamily: 'Lato', color: '#ffffff' },
+    cta: { fontSizeRem: 1.5, fontFamily: 'Oswald', color: '#ffffff' },
+  },
+  showScrim: false,
+}
+
+const mockFlyerItemWithEditorState: ContentItem = {
+  ...mockFlyerItem,
+  id: 'item-2',
+  text_output: JSON.stringify({ flyer: mockFlyerBrief, copy: mockCopy, editorState: mockSavedEditorState }),
+}
+
 describe('FlyerEditor', () => {
   beforeEach(() => {
     mockInvoke.mockReset()
@@ -55,6 +79,9 @@ describe('FlyerEditor', () => {
     mockDelete.mockClear()
     mockDeleteEq.mockReset()
     mockDeleteEq.mockResolvedValue({ error: null })
+    mockUpdate.mockClear()
+    mockUpdateEq.mockReset()
+    mockUpdateEq.mockResolvedValue({ error: null })
   })
 
   it('renders the flyer canvas area', () => {
@@ -300,5 +327,61 @@ describe('FlyerEditor', () => {
     const colorInput = screen.getByLabelText('Text color') as HTMLInputElement
     fireEvent.change(colorInput, { target: { value: '#ff0000' } })
     expect(headline.style.color).toBe('rgb(255, 0, 0)')
+  })
+
+  it('restores layer positions from saved editor state', () => {
+    render(<FlyerEditor item={mockFlyerItemWithEditorState} />)
+    const headline = screen.getByLabelText('Headline') as HTMLTextAreaElement
+    const wrapper = headline.closest('.absolute') as HTMLElement
+    expect(wrapper.style.left).toBe('25%')
+    expect(wrapper.style.top).toBe('20%')
+  })
+
+  it('restores layer styles from saved editor state', () => {
+    render(<FlyerEditor item={mockFlyerItemWithEditorState} />)
+    const headline = screen.getByLabelText('Headline') as HTMLTextAreaElement
+    expect(headline.style.fontFamily).toContain('Oswald')
+    expect(headline.style.color).toBe('rgb(255, 0, 0)')
+  })
+
+  it('restores scrim off state from saved editor state', () => {
+    render(<FlyerEditor item={mockFlyerItemWithEditorState} />)
+    expect(screen.getByRole('button', { name: 'Toggle scrim' })).toHaveTextContent('Scrim ○')
+    const headline = screen.getByLabelText('Headline') as HTMLTextAreaElement
+    const wrapper = headline.closest('.absolute') as HTMLElement
+    expect(wrapper).not.toHaveStyle({ background: 'rgba(0,0,0,0.35)' })
+  })
+
+  it('auto-saves editor state when a layer style changes', async () => {
+    vi.useFakeTimers()
+
+    render(<FlyerEditor item={mockFlyerItem} />)
+
+    // Focus headline to reveal layer controls
+    await act(async () => {
+      fireEvent.focus(screen.getByLabelText('Headline'))
+    })
+
+    // Change font via the dropdown
+    await act(async () => {
+      fireEvent.change(screen.getByRole('combobox', { name: 'Font family' }), {
+        target: { value: 'Oswald' },
+      })
+    })
+
+    // Advance past the 500ms debounce
+    await act(async () => {
+      vi.advanceTimersByTime(600)
+    })
+
+    expect(mockFrom).toHaveBeenCalledWith('content_items')
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text_output: expect.stringContaining('"Oswald"'),
+      }),
+    )
+    expect(mockUpdateEq).toHaveBeenCalledWith('id', 'item-1')
+
+    vi.useRealTimers()
   })
 })
