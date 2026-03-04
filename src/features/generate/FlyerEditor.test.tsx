@@ -231,6 +231,13 @@ describe('FlyerEditor', () => {
     expect(headline.style.minHeight).toBe(headline.style.fontSize)
   })
 
+  it('textarea is resizable (resize class set to both axes)', () => {
+    render(<FlyerEditor item={mockFlyerItem} />)
+    const headline = screen.getByLabelText('Headline') as HTMLTextAreaElement
+    expect(headline.className).not.toContain('resize-none')
+    expect(headline.className).toContain('resize')
+  })
+
   it('hides layer controls when no layer has been focused', () => {
     render(<FlyerEditor item={mockFlyerItem} />)
     expect(screen.queryByRole('button', { name: 'Increase font size' })).not.toBeInTheDocument()

@@ -288,3 +288,13 @@ Added per-layer style controls to the FlyerEditor toolbar. When a textarea is fo
 | 7 | `FlyerEditor.test.tsx` | changing the color input updates the layer text color | ✅ Pass | Color input change updates textarea color inline style |
 
 ---
+
+## Slice 19: Resize + WYSIWYG download
+
+Enabled native both-axis textarea resize (root cause: Tailwind preflight sets `resize: vertical` on all textareas; added the `resize` utility to override it). Width is managed DOM-only so React never resets it during re-renders. Download now reads each textarea's rendered pixel width from `getBoundingClientRect()`, scales to 1080px canvas, and uses `getWrappedLines` (`ctx.measureText`) to wrap text matching the preview.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| 1 | `FlyerEditor.test.tsx` | textarea is resizable (resize class set to both axes) | ✅ Pass | `resize` class present, `resize-none` absent — both-axis native resize enabled |
+
+---

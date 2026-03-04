@@ -104,6 +104,23 @@ function injectSingleFont(fontFamily: string) {
   document.head.appendChild(link)
 }
 
+function getWrappedLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const words = text.split(' ')
+  const lines: string[] = []
+  let current = words[0] ?? ''
+  for (let i = 1; i < words.length; i++) {
+    const test = current + ' ' + words[i]
+    if (ctx.measureText(test).width > maxWidth) {
+      lines.push(current)
+      current = words[i]
+    } else {
+      current = test
+    }
+  }
+  lines.push(current)
+  return lines
+}
+
 export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: Props) {
   const metadata = useMemo(() => parseMetadata(item), [item])
 
@@ -158,6 +175,15 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
       }
     })
   }, [copy])
+
+  // Reset textarea widths to default when the item changes (DOM-only; not in style prop so user drags persist)
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    container.querySelectorAll<HTMLTextAreaElement>('[data-layer-key]').forEach((ta) => {
+      ta.style.width = '280px'
+    })
+  }, [item.id])
 
   function updateLayerStyle(key: keyof FlyerCopyBlock, changes: Partial<LayerStyle>) {
     setLayerStyles((prev) => ({ ...prev, [key]: { ...prev[key], ...changes } }))
@@ -277,6 +303,7 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
 
     const img = new Image()
     img.crossOrigin = 'anonymous'
+    const containerEl = containerRef.current
     img.onload = async () => {
       // Wait for Google Fonts to be available before drawing
       await document.fonts.ready
@@ -285,6 +312,8 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
 
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
+
+      const containerW = containerEl?.getBoundingClientRect().width ?? width
 
       for (const layer of layers) {
         const text = copy[layer.key]
@@ -297,22 +326,39 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
         const weight = layerFontWeight(layer.key, typography)
         ctx.font = `${weight} ${fontSize}px "${ls.fontFamily}", serif`
 
+        // Scale the textarea's rendered width to canvas coordinates for WYSIWYG wrapping
+        const ta = containerEl?.querySelector<HTMLTextAreaElement>(`[data-layer-key="${layer.key}"]`)
+        const taWidth = ta ? ta.getBoundingClientRect().width : containerW * 0.3
+        const canvasMaxWidth = (taWidth / containerW) * width
+
+        const lines = getWrappedLines(ctx, text, canvasMaxWidth)
+        const lineHeightPx = fontSize
+        const totalHeight = lines.length * lineHeightPx
+
         if (showScrim) {
-          const metrics = ctx.measureText(text)
-          const tw = metrics.width
+          const maxLineWidth = Math.max(...lines.map((l) => ctx.measureText(l).width))
           const padX = 24
           const padY = 14
           ctx.shadowBlur = 0
           ctx.fillStyle = 'rgba(0,0,0,0.35)'
           ctx.beginPath()
-          ctx.roundRect(px - tw / 2 - padX, py - fontSize / 2 - padY, tw + padX * 2, fontSize + padY * 2, 8)
+          ctx.roundRect(
+            px - maxLineWidth / 2 - padX,
+            py - totalHeight / 2 - padY,
+            maxLineWidth + padX * 2,
+            totalHeight + padY * 2,
+            8,
+          )
           ctx.fill()
         }
 
         ctx.shadowColor = showScrim ? 'transparent' : 'rgba(0,0,0,0.65)'
         ctx.shadowBlur = showScrim ? 0 : 14
         ctx.fillStyle = ls.color
-        ctx.fillText(text, px, py)
+        lines.forEach((line, i) => {
+          const lineY = py - totalHeight / 2 + (i + 0.5) * lineHeightPx
+          ctx.fillText(line, px, lineY)
+        })
         ctx.shadowBlur = 0
       }
 
@@ -457,7 +503,7 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
               onMouseDown={(e) => e.stopPropagation()}
               aria-label={layer.label}
               data-layer-key={layer.key}
-              className="bg-transparent border-none outline-none text-center resize-none min-w-[120px] max-w-[280px]"
+              className="bg-transparent border-none outline-none text-center resize min-w-[120px]"
               style={{
                 textShadow: showScrim ? 'none' : '0 1px 4px rgba(0,0,0,0.8)',
                 fontFamily: `"${layerStyles[layer.key].fontFamily}", serif`,
