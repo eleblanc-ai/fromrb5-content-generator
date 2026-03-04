@@ -119,6 +119,17 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
     setLayers(DEFAULT_LAYERS.map((l) => ({ ...l })))
   }, [item.id, metadata?.copy, item.image_url])
 
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    container.querySelectorAll<HTMLTextAreaElement>('[data-layer-key]').forEach((ta) => {
+      ta.style.height = 'auto'
+      if (ta.scrollHeight > 0) {
+        ta.style.height = `${ta.scrollHeight}px`
+      }
+    })
+  }, [copy])
+
   function handleDragStart(key: string, e: React.MouseEvent) {
     e.preventDefault()
     const container = containerRef.current
@@ -341,6 +352,11 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
                 const key = layer.key
                 const val = e.target.value
                 setCopy((prev) => (prev ? { ...prev, [key]: val } : prev))
+                const el = e.target as HTMLTextAreaElement
+                el.style.height = 'auto'
+                if (el.scrollHeight > 0) {
+                  el.style.height = `${el.scrollHeight}px`
+                }
               }}
               onMouseDown={(e) => e.stopPropagation()}
               aria-label={layer.label}
@@ -351,7 +367,7 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
                 fontFamily: `"${layerFontFamily(layer.key, typography)}", serif`,
                 fontSize: layerFontSize(layer.key, typography),
                 fontWeight: layerFontWeight(layer.key, typography),
-                height: layerFontSize(layer.key, typography),
+                minHeight: layerFontSize(layer.key, typography),
                 lineHeight: '1',
                 padding: 0,
               }}

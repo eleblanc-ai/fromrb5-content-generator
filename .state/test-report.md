@@ -262,3 +262,13 @@ Fixed text overlay not showing (textarea clipped at `rows={1}` height), added a 
 | 5 | `ThreadView.test.tsx` | updates thread flyer_item_id when FlyerEditor iterates | ✅ Pass | `threads.update({ flyer_item_id })` called with new item ID on iterate |
 
 ---
+
+## Slice 17: Text auto-resize
+
+Fixed text still getting cut off after Slice 16. The `height: layerFontSize(...)` fix capped textareas at one-line height — text wrapping due to the 280px max-width was silently clipped. Replaced with `minHeight` (font size as floor) and JS auto-resize via `scrollHeight` in both `onChange` and a `useEffect([copy])`.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| 1 | `FlyerEditor.test.tsx` | textarea min-height matches its font size | ✅ Pass | Textarea minHeight equals fontSize — text can grow beyond the floor |
+
+---

@@ -224,10 +224,10 @@ describe('FlyerEditor', () => {
     expect(wrapper).not.toHaveStyle({ background: 'rgba(0,0,0,0.35)' })
   })
 
-  it('textarea height matches its font size', () => {
+  it('textarea min-height matches its font size', () => {
     render(<FlyerEditor item={mockFlyerItem} />)
     const headline = screen.getByLabelText('Headline') as HTMLTextAreaElement
-    expect(headline.style.height).toBeTruthy()
-    expect(headline.style.height).toBe(headline.style.fontSize)
+    expect(headline.style.minHeight).toBeTruthy()
+    expect(headline.style.minHeight).toBe(headline.style.fontSize)
   })
 })
