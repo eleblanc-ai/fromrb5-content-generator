@@ -107,7 +107,7 @@ describe('FlyerEditor', () => {
     mockInvoke.mockResolvedValueOnce({ data: { item: updatedItem }, error: null })
 
     const onIterated = vi.fn()
-    render(<FlyerEditor item={mockFlyerItem} onIterated={onIterated} />)
+    render(<FlyerEditor item={mockFlyerItem} threadId="thread-1" onIterated={onIterated} />)
 
     await userEvent.click(screen.getByRole('button', { name: 'Regenerate art' }))
 
@@ -120,6 +120,7 @@ describe('FlyerEditor', () => {
             prompt: 'Weekend tea event flyer',
             flyer: expect.objectContaining({ format: 'instagram_post' }),
             parentId: 'item-1',
+            threadId: 'thread-1',
           }),
         }),
       )

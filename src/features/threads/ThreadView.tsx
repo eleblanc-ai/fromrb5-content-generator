@@ -47,7 +47,12 @@ export default function ThreadView({
 
   async function handleItemChanged(newItem: ContentItem) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from('threads').update({ flyer_item_id: newItem.id }).eq('id', thread.id)
+    await (supabase as any).from('messages').insert({
+      thread_id: thread.id,
+      role: 'assistant',
+      content: 'Regenerated art',
+      flyer_item_id: newItem.id,
+    })
     onItemChanged(newItem)
   }
 
@@ -81,6 +86,7 @@ export default function ThreadView({
       flyer,
       parentId: item.id,
       refinementMessage: text,
+      threadId: thread.id,
     }
 
     const { data, error: fnError } = await supabase.functions.invoke('generate-flyer', {
@@ -159,6 +165,7 @@ export default function ThreadView({
         ) : item ? (
           <FlyerEditor
             item={item}
+            threadId={thread.id}
             onIterated={handleItemChanged}
             onDeleted={onThreadDeleted}
           />

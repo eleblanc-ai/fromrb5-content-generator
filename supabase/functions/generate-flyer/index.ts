@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { prompt, type, flyer, parentId, sourceImageUrl, copyOverride, refinementMessage } = (await req.json()) as {
+    const { prompt, type, flyer, parentId, sourceImageUrl, copyOverride, refinementMessage, threadId } = (await req.json()) as {
       prompt: string
       type: 'flyer_text'
       flyer: FlyerBrief
@@ -147,6 +147,7 @@ Deno.serve(async (req) => {
       sourceImageUrl?: string
       copyOverride?: FlyerCopyBlock
       refinementMessage?: string
+      threadId?: string
     }
 
     if (!prompt || !flyer || type !== 'flyer_text') {
@@ -225,7 +226,8 @@ Deno.serve(async (req) => {
 
     const { data: imageBase64, mimeType } = imagePart.inlineData
     const extension = mimeType?.includes('jpeg') ? 'jpg' : 'png'
-    const filename = `flyer-${flyer.format}-${crypto.randomUUID()}.${extension}`
+    const basename = `flyer-${flyer.format}-${crypto.randomUUID()}.${extension}`
+    const filename = threadId ? `${threadId}/${basename}` : basename
     const imageBytes = Uint8Array.from(atob(imageBase64 ?? ''), (c) => c.charCodeAt(0))
 
     const { error: uploadError } = await supabase.storage

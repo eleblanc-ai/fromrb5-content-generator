@@ -6,6 +6,7 @@ import type { FlyerTypography } from './typography'
 
 interface Props {
   item: ContentItem
+  threadId?: string
   onIterated?: (item: ContentItem) => void
   onDeleted?: () => void
 }
@@ -81,7 +82,7 @@ function injectGoogleFonts(typography: FlyerTypography) {
   document.head.appendChild(link)
 }
 
-export default function FlyerEditor({ item, onIterated, onDeleted }: Props) {
+export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: Props) {
   const metadata = useMemo(() => parseMetadata(item), [item])
 
   const [copy, setCopy] = useState<FlyerCopyBlock | null>(metadata?.copy ?? null)
@@ -168,6 +169,7 @@ export default function FlyerEditor({ item, onIterated, onDeleted }: Props) {
         flyer: metadata.flyer,
         copyOverride: copy ?? undefined,
         parentId: item.id,
+        threadId,
       },
     })
 

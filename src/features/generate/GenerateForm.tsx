@@ -212,6 +212,7 @@ export default function GenerateForm({ onResult, onThreadStarted, resumeThread, 
       type: 'flyer_text',
       prompt,
       flyer: brief,
+      threadId: thread.id,
     }
 
     const { data, error: fnError } = await supabase.functions.invoke('generate-flyer', {

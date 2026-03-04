@@ -36,6 +36,7 @@ export interface FlyerGenerationRequest {
   copyOverride?: FlyerCopyBlock
   parentId?: string
   refinementMessage?: string
+  threadId?: string
 }
 
 export interface ContentItem {

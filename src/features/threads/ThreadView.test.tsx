@@ -7,8 +7,6 @@ import type { ContentItem, Message, Thread } from '../../shared/config/supabase'
 const mockInvoke = vi.hoisted(() => vi.fn())
 const mockMessagesOrder = vi.hoisted(() => vi.fn().mockResolvedValue({ data: [], error: null }))
 const mockMessageInsert = vi.hoisted(() => vi.fn().mockResolvedValue({ data: null, error: null }))
-const mockThreadsUpdateEq = vi.hoisted(() => vi.fn().mockResolvedValue({ error: null }))
-const mockThreadsUpdate = vi.hoisted(() => vi.fn(() => ({ eq: mockThreadsUpdateEq })))
 
 vi.mock('../../shared/config/supabase', () => ({
   supabase: {
@@ -22,9 +20,6 @@ vi.mock('../../shared/config/supabase', () => ({
           }),
           insert: mockMessageInsert,
         }
-      }
-      if (table === 'threads') {
-        return { update: mockThreadsUpdate }
       }
       return {}
     },
@@ -107,11 +102,8 @@ describe('ThreadView', () => {
     mockInvoke.mockReset()
     mockMessagesOrder.mockReset()
     mockMessageInsert.mockReset()
-    mockThreadsUpdate.mockClear()
-    mockThreadsUpdateEq.mockReset()
     mockMessagesOrder.mockResolvedValue({ data: [], error: null })
     mockMessageInsert.mockResolvedValue({ data: null, error: null })
-    mockThreadsUpdateEq.mockResolvedValue({ error: null })
   })
 
   it('loads and displays interview message history', async () => {
@@ -230,7 +222,7 @@ describe('ThreadView', () => {
     })
   })
 
-  it('updates thread flyer_item_id when FlyerEditor iterates', async () => {
+  it('inserts a message with new flyer_item_id when FlyerEditor iterates', async () => {
     render(
       <ThreadView
         thread={mockThread}
@@ -244,8 +236,14 @@ describe('ThreadView', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Iterate' }))
 
     await waitFor(() => {
-      expect(mockThreadsUpdate).toHaveBeenCalledWith({ flyer_item_id: 'item-iterated' })
-      expect(mockThreadsUpdateEq).toHaveBeenCalledWith('id', 'thread-1')
+      expect(mockMessageInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          thread_id: 'thread-1',
+          role: 'assistant',
+          content: 'Regenerated art',
+          flyer_item_id: 'item-iterated',
+        }),
+      )
     })
   })
 })
