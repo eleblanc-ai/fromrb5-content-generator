@@ -248,3 +248,17 @@ Copy-aware Gemini prompt reserves clear zones for each text block using the actu
 | 11 | `FlyerEditor.test.tsx` | applies the correct font family for editorial fontVibe | ✅ Pass | Headline uses Playfair Display for editorial vibe |
 
 ---
+
+## Slice 16: Text Overlay Fix + Scrim Toggle + Stale Image Fix
+
+Fixed text overlay not showing (textarea clipped at `rows={1}` height), added a toggleable semi-transparent scrim pill behind each text layer, and fixed stale image on refresh by updating `threads.flyer_item_id` in Supabase whenever a new item is generated via "Regenerate art" or refinement.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| 1 | `FlyerEditor.test.tsx` | shows the scrim toggle button | ✅ Pass | Toggle scrim button present in toolbar |
+| 2 | `FlyerEditor.test.tsx` | scrim is on by default and shows filled indicator | ✅ Pass | Button label shows "Scrim ●" by default |
+| 3 | `FlyerEditor.test.tsx` | toggling scrim off changes label and removes background from layers | ✅ Pass | Click removes background from layer wrappers; label changes to "Scrim ○" |
+| 4 | `FlyerEditor.test.tsx` | textarea height matches its font size | ✅ Pass | Textarea height inline style equals its font size (no clipping) |
+| 5 | `ThreadView.test.tsx` | updates thread flyer_item_id when FlyerEditor iterates | ✅ Pass | `threads.update({ flyer_item_id })` called with new item ID on iterate |
+
+---

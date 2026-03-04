@@ -7,6 +7,8 @@ import type { ContentItem, Message, Thread } from '../../shared/config/supabase'
 const mockInvoke = vi.hoisted(() => vi.fn())
 const mockMessagesOrder = vi.hoisted(() => vi.fn().mockResolvedValue({ data: [], error: null }))
 const mockMessageInsert = vi.hoisted(() => vi.fn().mockResolvedValue({ data: null, error: null }))
+const mockThreadsUpdateEq = vi.hoisted(() => vi.fn().mockResolvedValue({ error: null }))
+const mockThreadsUpdate = vi.hoisted(() => vi.fn(() => ({ eq: mockThreadsUpdateEq })))
 
 vi.mock('../../shared/config/supabase', () => ({
   supabase: {
@@ -21,6 +23,9 @@ vi.mock('../../shared/config/supabase', () => ({
           insert: mockMessageInsert,
         }
       }
+      if (table === 'threads') {
+        return { update: mockThreadsUpdate }
+      }
       return {}
     },
     functions: {
@@ -30,9 +35,18 @@ vi.mock('../../shared/config/supabase', () => ({
 }))
 
 vi.mock('../generate', () => ({
-  FlyerEditor: ({ item, onDeleted }: { item: ContentItem; onDeleted?: () => void }) => (
+  FlyerEditor: ({
+    item,
+    onIterated,
+    onDeleted,
+  }: {
+    item: ContentItem
+    onIterated?: (item: ContentItem) => void
+    onDeleted?: () => void
+  }) => (
     <div data-testid="flyer-editor">
       <span data-testid="result-id">{item.id}</span>
+      <button onClick={() => onIterated?.({ ...item, id: 'item-iterated' })}>Iterate</button>
       <button onClick={onDeleted}>Delete thread</button>
     </div>
   ),
@@ -93,8 +107,11 @@ describe('ThreadView', () => {
     mockInvoke.mockReset()
     mockMessagesOrder.mockReset()
     mockMessageInsert.mockReset()
+    mockThreadsUpdate.mockClear()
+    mockThreadsUpdateEq.mockReset()
     mockMessagesOrder.mockResolvedValue({ data: [], error: null })
     mockMessageInsert.mockResolvedValue({ data: null, error: null })
+    mockThreadsUpdateEq.mockResolvedValue({ error: null })
   })
 
   it('loads and displays interview message history', async () => {
@@ -210,6 +227,25 @@ describe('ThreadView', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Send refinement' })).toBeDisabled()
       expect(screen.getByPlaceholderText('Refine your flyer...')).toBeDisabled()
+    })
+  })
+
+  it('updates thread flyer_item_id when FlyerEditor iterates', async () => {
+    render(
+      <ThreadView
+        thread={mockThread}
+        item={mockFlyerItem}
+        loading={false}
+        onItemChanged={vi.fn()}
+        onThreadDeleted={() => {}}
+      />,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'Iterate' }))
+
+    await waitFor(() => {
+      expect(mockThreadsUpdate).toHaveBeenCalledWith({ flyer_item_id: 'item-iterated' })
+      expect(mockThreadsUpdateEq).toHaveBeenCalledWith('id', 'thread-1')
     })
   })
 })

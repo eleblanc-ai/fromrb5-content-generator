@@ -87,6 +87,7 @@ export default function FlyerEditor({ item, onIterated, onDeleted }: Props) {
   const [copy, setCopy] = useState<FlyerCopyBlock | null>(metadata?.copy ?? null)
   const [layers, setLayers] = useState<TextLayer[]>(DEFAULT_LAYERS.map((l) => ({ ...l })))
   const [bgUrl, setBgUrl] = useState<string | null>(item.image_url)
+  const [showScrim, setShowScrim] = useState(true)
   const [regenerating, setRegenerating] = useState(false)
   const [regenerateError, setRegenerateError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -220,9 +221,6 @@ export default function FlyerEditor({ item, onIterated, onDeleted }: Props) {
 
       ctx.drawImage(img, 0, 0, width, height)
 
-      ctx.shadowColor = 'rgba(0,0,0,0.65)'
-      ctx.shadowBlur = 14
-      ctx.fillStyle = '#ffffff'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
 
@@ -235,10 +233,25 @@ export default function FlyerEditor({ item, onIterated, onDeleted }: Props) {
         const fontFamily = layerFontFamily(layer.key, typography)
         const weight = layerFontWeight(layer.key, typography)
         ctx.font = `${weight} ${fontSize}px "${fontFamily}", serif`
-        ctx.fillText(text, px, py)
-      }
 
-      ctx.shadowBlur = 0
+        if (showScrim) {
+          const metrics = ctx.measureText(text)
+          const tw = metrics.width
+          const padX = 24
+          const padY = 14
+          ctx.shadowBlur = 0
+          ctx.fillStyle = 'rgba(0,0,0,0.35)'
+          ctx.beginPath()
+          ctx.roundRect(px - tw / 2 - padX, py - fontSize / 2 - padY, tw + padX * 2, fontSize + padY * 2, 8)
+          ctx.fill()
+        }
+
+        ctx.shadowColor = showScrim ? 'transparent' : 'rgba(0,0,0,0.65)'
+        ctx.shadowBlur = showScrim ? 0 : 14
+        ctx.fillStyle = '#ffffff'
+        ctx.fillText(text, px, py)
+        ctx.shadowBlur = 0
+      }
 
       const link = document.createElement('a')
       link.href = canvas.toDataURL('image/png')
@@ -266,6 +279,14 @@ export default function FlyerEditor({ item, onIterated, onDeleted }: Props) {
         <span className="text-xs font-medium text-ink-muted uppercase tracking-wider">Flyer editor</span>
         <div className="flex items-center gap-3">
           {deleteError && <span className="text-xs text-red-500">{deleteError}</span>}
+          <button
+            type="button"
+            onClick={() => setShowScrim((s) => !s)}
+            aria-label="Toggle scrim"
+            className="text-xs text-ink-muted hover:text-ink transition-colors"
+          >
+            {showScrim ? 'Scrim ●' : 'Scrim ○'}
+          </button>
           <button
             type="button"
             onClick={handleDelete}
@@ -298,6 +319,9 @@ export default function FlyerEditor({ item, onIterated, onDeleted }: Props) {
               left: `${layer.x}%`,
               top: `${layer.y}%`,
               transform: 'translate(-50%, -50%)',
+              ...(showScrim
+                ? { background: 'rgba(0,0,0,0.35)', borderRadius: '8px', padding: '2px 10px 2px 4px' }
+                : {}),
             }}
           >
             <button
@@ -305,7 +329,7 @@ export default function FlyerEditor({ item, onIterated, onDeleted }: Props) {
               aria-label={`Drag ${layer.key}`}
               onMouseDown={(e) => handleDragStart(layer.key, e)}
               className="cursor-grab active:cursor-grabbing text-white/70 hover:text-white text-sm px-1 shrink-0 select-none"
-              style={{ textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}
+              style={{ textShadow: showScrim ? 'none' : '0 1px 3px rgba(0,0,0,0.8)' }}
             >
               ⠿
             </button>
@@ -317,15 +341,17 @@ export default function FlyerEditor({ item, onIterated, onDeleted }: Props) {
                 setCopy((prev) => (prev ? { ...prev, [key]: val } : prev))
               }}
               onMouseDown={(e) => e.stopPropagation()}
-              rows={1}
               aria-label={layer.label}
               data-layer-key={layer.key}
-              className="bg-transparent border-none outline-none text-white text-center resize-none overflow-hidden min-w-[120px] max-w-[280px]"
+              className="bg-transparent border-none outline-none text-white text-center resize-none min-w-[120px] max-w-[280px]"
               style={{
-                textShadow: '0 1px 4px rgba(0,0,0,0.8)',
+                textShadow: showScrim ? 'none' : '0 1px 4px rgba(0,0,0,0.8)',
                 fontFamily: `"${layerFontFamily(layer.key, typography)}", serif`,
                 fontSize: layerFontSize(layer.key, typography),
                 fontWeight: layerFontWeight(layer.key, typography),
+                height: layerFontSize(layer.key, typography),
+                lineHeight: '1',
+                padding: 0,
               }}
             />
           </div>

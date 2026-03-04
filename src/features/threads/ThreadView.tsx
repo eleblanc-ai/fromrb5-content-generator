@@ -45,6 +45,12 @@ export default function ThreadView({
     }
   }, [thread.id])
 
+  async function handleItemChanged(newItem: ContentItem) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from('threads').update({ flyer_item_id: newItem.id }).eq('id', thread.id)
+    onItemChanged(newItem)
+  }
+
   async function handleRefinement(e: React.FormEvent) {
     e.preventDefault()
     const text = refinementInput.trim()
@@ -113,7 +119,7 @@ export default function ThreadView({
     ])
 
     setRefinementInput('')
-    onItemChanged(response.item)
+    await handleItemChanged(response.item)
   }
 
   const interviewMessages = dbMessages.filter((m) => m.flyer_item_id === null)
@@ -153,7 +159,7 @@ export default function ThreadView({
         ) : item ? (
           <FlyerEditor
             item={item}
-            onIterated={onItemChanged}
+            onIterated={handleItemChanged}
             onDeleted={onThreadDeleted}
           />
         ) : (

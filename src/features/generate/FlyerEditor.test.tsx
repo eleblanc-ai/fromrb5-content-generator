@@ -197,4 +197,36 @@ describe('FlyerEditor', () => {
     const headline = screen.getByLabelText('Headline') as HTMLTextAreaElement
     expect(headline.style.fontFamily).toContain('Playfair Display')
   })
+
+  it('shows the scrim toggle button', () => {
+    render(<FlyerEditor item={mockFlyerItem} />)
+    expect(screen.getByRole('button', { name: 'Toggle scrim' })).toBeInTheDocument()
+  })
+
+  it('scrim is on by default and shows filled indicator', () => {
+    render(<FlyerEditor item={mockFlyerItem} />)
+    expect(screen.getByRole('button', { name: 'Toggle scrim' })).toHaveTextContent('Scrim ●')
+  })
+
+  it('toggling scrim off changes label and removes background from layers', async () => {
+    render(<FlyerEditor item={mockFlyerItem} />)
+
+    const toggle = screen.getByRole('button', { name: 'Toggle scrim' })
+    const headline = screen.getByLabelText('Headline') as HTMLTextAreaElement
+    const wrapper = headline.closest('.absolute') as HTMLElement
+
+    expect(wrapper).toHaveStyle({ background: 'rgba(0,0,0,0.35)' })
+
+    await userEvent.click(toggle)
+
+    expect(toggle).toHaveTextContent('Scrim ○')
+    expect(wrapper).not.toHaveStyle({ background: 'rgba(0,0,0,0.35)' })
+  })
+
+  it('textarea height matches its font size', () => {
+    render(<FlyerEditor item={mockFlyerItem} />)
+    const headline = screen.getByLabelText('Headline') as HTMLTextAreaElement
+    expect(headline.style.height).toBeTruthy()
+    expect(headline.style.height).toBe(headline.style.fontSize)
+  })
 })
