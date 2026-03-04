@@ -97,20 +97,38 @@ function getFormatInstructions(format: FlyerFormat) {
   return 'Canvas: 1080x1080 square composition for Instagram Post. Keep balanced hierarchy and center-safe margins.'
 }
 
-function buildFlyerImagePrompt(flyer: FlyerBrief, refinementMessage?: string): string {
+function buildFlyerImagePrompt(flyer: FlyerBrief, copy: FlyerCopyBlock, refinementMessage?: string): string {
   const formatInstructions = getFormatInstructions(flyer.format)
   const refinementSuffix = refinementMessage ? `\nRefinement request: "${refinementMessage}"` : ''
 
+  // Describe where text will land so Gemini can reserve clear zones
+  const zoneGuide = flyer.format === 'instagram_story'
+    ? [
+        'TEXT ZONE GUIDE — leave these areas clear with high contrast for programmatic text overlay:',
+        `  • Upper center (25–45% from top): large headline — "${copy.headline}" — and tagline — "${copy.tagline}"`,
+        `  • Center (48–56% from top): body copy — "${copy.body}"`,
+        `  • Lower center (60–68% from top): CTA — "${copy.cta}"`,
+        '  Keep these zones free of busy detail, busy patterns, or faces. Use gentle gradients or negative space there.',
+      ].join('\n')
+    : [
+        'TEXT ZONE GUIDE — leave these areas clear with high contrast for programmatic text overlay:',
+        `  • Upper-center (30–46% from top): large headline — "${copy.headline}" — and tagline — "${copy.tagline}"`,
+        `  • Center (48–55% from top): body copy — "${copy.body}"`,
+        `  • Lower-center (58–66% from top): CTA — "${copy.cta}"`,
+        '  Keep these zones free of busy detail, patterns, or faces. Use gentle gradients or negative space there.',
+      ].join('\n')
+
   return [
     'Create a background-only image for a premium tea brand flyer.',
-    'NO text, NO lettering, NO words, NO typography of any kind in the image.',
+    'CRITICAL: NO text, NO lettering, NO words, NO numbers, NO typography of any kind anywhere in the image.',
     'Pure visual composition only — textures, gradients, product photography, botanical elements.',
-    'Leave the center area relatively clear and uncluttered to accommodate text overlay.',
+    zoneGuide,
     formatInstructions,
     `Color vibe: ${flyer.colorVibe}`,
+    `Brand tone: ${flyer.tone}`,
     `Constraints: ${flyer.formatConstraints}`,
     'Design style: premium, calm, editorial tea brand aesthetic.',
-    'Output must be a text-free background image suitable for programmatic text overlay.',
+    'Output must be a completely text-free background image optimised for programmatic text overlay.',
   ].join('\n') + refinementSuffix
 }
 
@@ -164,7 +182,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     )
 
-    const imagePrompt = buildFlyerImagePrompt(flyer, refinementMessage)
+    const imagePrompt = buildFlyerImagePrompt(flyer, copy, refinementMessage)
 
     const contents = sourceInlineData
       ? [

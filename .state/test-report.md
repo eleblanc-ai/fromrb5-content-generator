@@ -228,3 +228,23 @@ Full thread lifecycle: delete threads from sidebar, persist interview history to
 | 9 | `src/features/generate/GenerateForm.test.tsx` | restores conversation when resume props are provided without calling interview-flyer | ✅ Pass | Resume props restore messages; interview-flyer not called on mount |
 
 ---
+
+## Slice 15: Typography Polish + Copy-Aware Composition
+
+Copy-aware Gemini prompt reserves clear zones for each text block using the actual copy. FlyerEditor applies Google Fonts pairings based on fontVibe keyword matching, injects the stylesheet dynamically, and uses the loaded typeface in canvas exports.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| 1 | `typography.test.ts` | returns Playfair Display + Lato for editorial vibes | ✅ Pass | Editorial keyword maps to correct pairing |
+| 2 | `typography.test.ts` | returns Cormorant Garamond + Montserrat for elegant/luxury vibes | ✅ Pass | Luxury keyword maps to correct pairing |
+| 3 | `typography.test.ts` | returns Oswald + Open Sans for bold/impact vibes | ✅ Pass | Bold keyword maps to correct pairing |
+| 4 | `typography.test.ts` | returns Nunito for warm/friendly vibes | ✅ Pass | Friendly keyword maps to correct pairing |
+| 5 | `typography.test.ts` | returns DM Sans default for unknown vibe | ✅ Pass | Unknown vibe falls back to DM Sans |
+| 6 | `typography.test.ts` | has correct size hierarchy: headline > cta > tagline > body | ✅ Pass | Size ordering enforced |
+| 7 | `typography.test.ts` | headline and cta have bold weight, body has regular weight | ✅ Pass | Weight hierarchy correct |
+| 8 | `typography.test.ts` | includes both headline and body fonts in the URL | ✅ Pass | Google Fonts URL contains both families |
+| 9 | `typography.test.ts` | deduplicates when headline and body font are the same | ✅ Pass | Single-font vibes produce one family in URL |
+| 10 | `FlyerEditor.test.tsx` | applies larger font size to headline than body | ✅ Pass | Headline textarea has larger inline fontSize than body |
+| 11 | `FlyerEditor.test.tsx` | applies the correct font family for editorial fontVibe | ✅ Pass | Headline uses Playfair Display for editorial vibe |
+
+---

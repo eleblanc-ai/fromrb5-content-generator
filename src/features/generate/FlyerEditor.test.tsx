@@ -178,4 +178,23 @@ describe('FlyerEditor', () => {
     render(<FlyerEditor item={emptyItem} />)
     expect(screen.getByText('No flyer data available.')).toBeInTheDocument()
   })
+
+  it('applies larger font size to headline than body', () => {
+    render(<FlyerEditor item={mockFlyerItem} />)
+
+    const headline = screen.getByLabelText('Headline') as HTMLTextAreaElement
+    const body = screen.getByLabelText('Body') as HTMLTextAreaElement
+
+    const headlineSize = parseFloat(headline.style.fontSize)
+    const bodySize = parseFloat(body.style.fontSize)
+
+    expect(headlineSize).toBeGreaterThan(bodySize)
+  })
+
+  it('applies the correct font family for editorial fontVibe', () => {
+    render(<FlyerEditor item={mockFlyerItem} />)
+
+    const headline = screen.getByLabelText('Headline') as HTMLTextAreaElement
+    expect(headline.style.fontFamily).toContain('Playfair Display')
+  })
 })

@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState, useEffect } from 'react'
 import { supabase } from '../../shared/config/supabase'
 import type { ContentItem, FlyerBrief, FlyerCopyBlock, FlyerFormat } from '../../shared/config/supabase'
+import { getFlyerTypography, buildGoogleFontsUrl } from './typography'
+import type { FlyerTypography } from './typography'
 
 interface Props {
   item: ContentItem
@@ -27,18 +29,19 @@ const DEFAULT_LAYERS: TextLayer[] = [
   { key: 'cta', label: 'CTA', x: 50, y: 63 },
 ]
 
-const FONT_SIZES_POST: Record<keyof FlyerCopyBlock, number> = {
+// Canvas pixel sizes for 1080px-wide output
+const CANVAS_FONT_SIZES_POST: Record<keyof FlyerCopyBlock, number> = {
   headline: 80,
   tagline: 48,
-  body: 40,
-  cta: 52,
+  body: 38,
+  cta: 58,
 }
 
-const FONT_SIZES_STORY: Record<keyof FlyerCopyBlock, number> = {
+const CANVAS_FONT_SIZES_STORY: Record<keyof FlyerCopyBlock, number> = {
   headline: 90,
   tagline: 54,
   body: 44,
-  cta: 60,
+  cta: 66,
 }
 
 function parseMetadata(item: ContentItem): FlyerMetadata | null {
@@ -48,6 +51,34 @@ function parseMetadata(item: ContentItem): FlyerMetadata | null {
   } catch {
     return null
   }
+}
+
+function layerFontFamily(key: keyof FlyerCopyBlock, typo: FlyerTypography): string {
+  return key === 'headline' || key === 'cta' ? typo.headlineFont : typo.bodyFont
+}
+
+function layerFontSize(key: keyof FlyerCopyBlock, typo: FlyerTypography): string {
+  const map: Record<keyof FlyerCopyBlock, number> = {
+    headline: typo.headlineSizeRem,
+    tagline: typo.taglineSizeRem,
+    body: typo.bodySizeRem,
+    cta: typo.ctaSizeRem,
+  }
+  return `${map[key]}rem`
+}
+
+function layerFontWeight(key: keyof FlyerCopyBlock, typo: FlyerTypography): number {
+  return key === 'headline' || key === 'cta' ? typo.headlineWeight : typo.bodyWeight
+}
+
+function injectGoogleFonts(typography: FlyerTypography) {
+  const id = `gf-${typography.headlineFont}-${typography.bodyFont}`.replace(/\s+/g, '-')
+  if (document.getElementById(id)) return
+  const link = document.createElement('link')
+  link.id = id
+  link.rel = 'stylesheet'
+  link.href = buildGoogleFontsUrl(typography)
+  document.head.appendChild(link)
 }
 
 export default function FlyerEditor({ item, onIterated, onDeleted }: Props) {
@@ -69,6 +100,16 @@ export default function FlyerEditor({ item, onIterated, onDeleted }: Props) {
     origX: number
     origY: number
   } | null>(null)
+
+  const typography = useMemo(
+    () => getFlyerTypography(metadata?.flyer?.fontVibe ?? ''),
+    [metadata?.flyer?.fontVibe],
+  )
+
+  // Load Google Fonts whenever the typography pairing changes
+  useEffect(() => {
+    injectGoogleFonts(typography)
+  }, [typography])
 
   useEffect(() => {
     setCopy(metadata?.copy ?? null)
@@ -157,13 +198,13 @@ export default function FlyerEditor({ item, onIterated, onDeleted }: Props) {
     onDeleted?.()
   }
 
-  function handleDownload() {
+  async function handleDownload() {
     if (!bgUrl || !copy) return
 
     const format: FlyerFormat = metadata?.flyer?.format ?? 'instagram_post'
     const width = 1080
     const height = format === 'instagram_story' ? 1920 : 1080
-    const fontSizes = format === 'instagram_story' ? FONT_SIZES_STORY : FONT_SIZES_POST
+    const fontSizes = format === 'instagram_story' ? CANVAS_FONT_SIZES_STORY : CANVAS_FONT_SIZES_POST
 
     const canvas = document.createElement('canvas')
     canvas.width = width
@@ -173,7 +214,10 @@ export default function FlyerEditor({ item, onIterated, onDeleted }: Props) {
 
     const img = new Image()
     img.crossOrigin = 'anonymous'
-    img.onload = () => {
+    img.onload = async () => {
+      // Wait for Google Fonts to be available before drawing
+      await document.fonts.ready
+
       ctx.drawImage(img, 0, 0, width, height)
 
       ctx.shadowColor = 'rgba(0,0,0,0.65)'
@@ -188,8 +232,9 @@ export default function FlyerEditor({ item, onIterated, onDeleted }: Props) {
         const px = (layer.x / 100) * width
         const py = (layer.y / 100) * height
         const fontSize = fontSizes[layer.key]
-        const isBold = layer.key === 'headline' || layer.key === 'cta'
-        ctx.font = `${isBold ? 'bold ' : ''}${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`
+        const fontFamily = layerFontFamily(layer.key, typography)
+        const weight = layerFontWeight(layer.key, typography)
+        ctx.font = `${weight} ${fontSize}px "${fontFamily}", serif`
         ctx.fillText(text, px, py)
       }
 
@@ -274,16 +319,13 @@ export default function FlyerEditor({ item, onIterated, onDeleted }: Props) {
               onMouseDown={(e) => e.stopPropagation()}
               rows={1}
               aria-label={layer.label}
+              data-layer-key={layer.key}
               className="bg-transparent border-none outline-none text-white text-center resize-none overflow-hidden min-w-[120px] max-w-[280px]"
               style={{
                 textShadow: '0 1px 4px rgba(0,0,0,0.8)',
-                fontWeight: layer.key === 'headline' || layer.key === 'cta' ? 700 : 400,
-                fontSize:
-                  layer.key === 'headline'
-                    ? '1.1rem'
-                    : layer.key === 'cta'
-                      ? '1rem'
-                      : '0.85rem',
+                fontFamily: `"${layerFontFamily(layer.key, typography)}", serif`,
+                fontSize: layerFontSize(layer.key, typography),
+                fontWeight: layerFontWeight(layer.key, typography),
               }}
             />
           </div>
