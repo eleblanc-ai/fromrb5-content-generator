@@ -2,17 +2,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import GenerateForm from './GenerateForm'
-import type { Thread } from '../../shared/config/supabase'
+import type { Thread, Message } from '../../shared/config/supabase'
 
 const mockInvoke = vi.hoisted(() => vi.fn())
 const mockThreadSingle = vi.hoisted(() => vi.fn())
+const mockThreadUpdate = vi.hoisted(() => vi.fn().mockResolvedValue({ data: null, error: null }))
 const mockMessageInsert = vi.hoisted(() =>
   vi.fn().mockResolvedValue({ data: null, error: null }),
 )
 
 const mockThread: Thread = {
   id: 'thread-123',
-  title: 'Boost weekend sales',
+  title: 'Jasmine Green Reserve',
   format: 'instagram_post',
   render_mode: 'ai_composed',
   created_at: '2026-03-03T00:00:00Z',
@@ -30,6 +31,9 @@ vi.mock('../../shared/config/supabase', () => ({
             select: () => ({
               single: mockThreadSingle,
             }),
+          }),
+          update: () => ({
+            eq: mockThreadUpdate,
           }),
         }
       }
@@ -68,14 +72,16 @@ describe('GenerateForm', () => {
   beforeEach(() => {
     mockInvoke.mockReset()
     mockThreadSingle.mockReset()
+    mockThreadUpdate.mockReset()
     mockMessageInsert.mockReset()
     mockMessageInsert.mockResolvedValue({ data: null, error: null })
+    mockThreadUpdate.mockResolvedValue({ data: null, error: null })
     mockThreadSingle.mockResolvedValue({ data: mockThread, error: null })
   })
 
   it('shows loading state while interview is starting', () => {
     mockInvoke.mockImplementation(() => new Promise(() => {}))
-    render(<GenerateForm onResult={() => {}} />)
+    render(<GenerateForm onResult={() => {}} onThreadStarted={() => {}} />)
     expect(screen.getByPlaceholderText('Type your answer...')).toBeDisabled()
   })
 
@@ -84,7 +90,7 @@ describe('GenerateForm', () => {
       data: { message: 'What product are we making this flyer for?', complete: false },
       error: null,
     })
-    render(<GenerateForm onResult={() => {}} />)
+    render(<GenerateForm onResult={() => {}} onThreadStarted={() => {}} />)
     await waitFor(() => {
       expect(screen.getByText('What product are we making this flyer for?')).toBeInTheDocument()
     })
@@ -102,7 +108,7 @@ describe('GenerateForm', () => {
         error: null,
       })
 
-    render(<GenerateForm onResult={() => {}} />)
+    render(<GenerateForm onResult={() => {}} onThreadStarted={() => {}} />)
     await waitFor(() => screen.getByPlaceholderText('Type your answer...'))
 
     await userEvent.type(screen.getByPlaceholderText('Type your answer...'), 'Jasmine Green Reserve')
@@ -112,6 +118,35 @@ describe('GenerateForm', () => {
       expect(screen.getByText('Jasmine Green Reserve')).toBeInTheDocument()
       expect(screen.getByText("What's the campaign goal?")).toBeInTheDocument()
     })
+  })
+
+  it('creates thread on first user message and notifies onThreadStarted', async () => {
+    mockInvoke
+      .mockResolvedValueOnce({
+        data: { message: 'What product are we making this flyer for?', complete: false },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: { message: "What's the campaign goal?", complete: false },
+        error: null,
+      })
+
+    const onThreadStarted = vi.fn()
+    render(<GenerateForm onResult={() => {}} onThreadStarted={onThreadStarted} />)
+    await waitFor(() => screen.getByPlaceholderText('Type your answer...'))
+
+    await userEvent.type(screen.getByPlaceholderText('Type your answer...'), 'Jasmine Green Reserve')
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    await waitFor(() => {
+      expect(onThreadStarted).toHaveBeenCalledWith(expect.objectContaining({ id: 'thread-123' }))
+    })
+
+    // Batch insert should include opening question + first user answer
+    expect(mockMessageInsert).toHaveBeenCalledWith([
+      expect.objectContaining({ role: 'assistant', content: 'What product are we making this flyer for?' }),
+      expect.objectContaining({ role: 'user', content: 'Jasmine Green Reserve' }),
+    ])
   })
 
   it('auto-generates and fires onResult when interview completes', async () => {
@@ -137,7 +172,7 @@ describe('GenerateForm', () => {
       })
 
     const onResult = vi.fn()
-    render(<GenerateForm onResult={onResult} />)
+    render(<GenerateForm onResult={onResult} onThreadStarted={() => {}} />)
     await waitFor(() => screen.getByPlaceholderText('Type your answer...'))
 
     await userEvent.type(screen.getByPlaceholderText('Type your answer...'), 'Jasmine Green Reserve')
@@ -182,7 +217,7 @@ describe('GenerateForm', () => {
       })
       .mockImplementationOnce(() => new Promise(() => {})) // generate-flyer never resolves
 
-    render(<GenerateForm onResult={() => {}} />)
+    render(<GenerateForm onResult={() => {}} onThreadStarted={() => {}} />)
     await waitFor(() => screen.getByPlaceholderText('Type your answer...'))
 
     await userEvent.type(screen.getByPlaceholderText('Type your answer...'), 'Jasmine Green Reserve')
@@ -204,7 +239,7 @@ describe('GenerateForm', () => {
         error: null,
       })
 
-    render(<GenerateForm onResult={() => {}} />)
+    render(<GenerateForm onResult={() => {}} onThreadStarted={() => {}} />)
     await waitFor(() => screen.getByPlaceholderText('Type your answer...'))
 
     await userEvent.type(screen.getByPlaceholderText('Type your answer...'), 'Jasmine Green Reserve')
@@ -213,5 +248,31 @@ describe('GenerateForm', () => {
     await waitFor(() => {
       expect(screen.getByText('API call failed')).toBeInTheDocument()
     })
+  })
+
+  it('restores conversation when resume props are provided without calling interview-flyer', async () => {
+    const resumeMessages: Message[] = [
+      { id: 'msg-1', thread_id: 'thread-123', role: 'assistant', content: 'What product are we making this flyer for?', flyer_item_id: null, created_at: '2026-03-03T10:00:00Z' },
+      { id: 'msg-2', thread_id: 'thread-123', role: 'user', content: 'Jasmine Green Reserve', flyer_item_id: null, created_at: '2026-03-03T10:01:00Z' },
+    ]
+
+    render(
+      <GenerateForm
+        onResult={() => {}}
+        onThreadStarted={() => {}}
+        resumeThread={mockThread}
+        resumeMessages={resumeMessages}
+      />,
+    )
+
+    // Messages should be visible immediately — no API call needed
+    expect(screen.getByText('What product are we making this flyer for?')).toBeInTheDocument()
+    expect(screen.getByText('Jasmine Green Reserve')).toBeInTheDocument()
+
+    // interview-flyer should NOT be called on mount in resume mode
+    expect(mockInvoke).not.toHaveBeenCalled()
+
+    // Input should be enabled so user can continue
+    expect(screen.getByPlaceholderText('Type your answer...')).not.toBeDisabled()
   })
 })

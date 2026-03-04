@@ -96,7 +96,7 @@ function getFormatInstructions(format: FlyerFormat) {
   return 'Canvas: 1080x1080 square composition for Instagram Post. Keep balanced hierarchy and center-safe margins.'
 }
 
-function buildFlyerImagePrompt(flyer: FlyerBrief, copy: FlyerCopyBlock) {
+function buildFlyerImagePrompt(flyer: FlyerBrief, copy: FlyerCopyBlock, refinementMessage?: string): string {
   const formatInstructions = getFormatInstructions(flyer.format)
 
   const copyText = [
@@ -105,6 +105,8 @@ function buildFlyerImagePrompt(flyer: FlyerBrief, copy: FlyerCopyBlock) {
     `Body: "${copy.body}"`,
     `Call to action: "${copy.cta}"`,
   ].join('\n')
+
+  const refinementSuffix = refinementMessage ? `\nRefinement request: "${refinementMessage}"` : ''
 
   if (flyer.renderMode === 'overlay') {
     return [
@@ -117,7 +119,7 @@ function buildFlyerImagePrompt(flyer: FlyerBrief, copy: FlyerCopyBlock) {
       `Constraints: ${flyer.formatConstraints}`,
       'Design style: premium, calm, editorial tea brand aesthetic.',
       'Output must be a text-free background image suitable for programmatic text overlay.',
-    ].join('\n')
+    ].join('\n') + refinementSuffix
   }
 
   return [
@@ -129,7 +131,7 @@ function buildFlyerImagePrompt(flyer: FlyerBrief, copy: FlyerCopyBlock) {
     `Constraints: ${flyer.formatConstraints}`,
     'Design style: premium, calm, editorial tea brand aesthetic.',
     'The final image must be legible for social posting.',
-  ].join('\n')
+  ].join('\n') + refinementSuffix
 }
 
 
@@ -139,13 +141,14 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { prompt, type, flyer, parentId, sourceImageUrl, copyOverride } = (await req.json()) as {
+    const { prompt, type, flyer, parentId, sourceImageUrl, copyOverride, refinementMessage } = (await req.json()) as {
       prompt: string
       type: 'flyer_text'
       flyer: FlyerBrief
       parentId?: string
       sourceImageUrl?: string
       copyOverride?: FlyerCopyBlock
+      refinementMessage?: string
     }
 
     if (!prompt || !flyer || type !== 'flyer_text') {
@@ -181,7 +184,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     )
 
-    const imagePrompt = buildFlyerImagePrompt(flyer, copy)
+    const imagePrompt = buildFlyerImagePrompt(flyer, copy, refinementMessage)
 
     const contents = sourceInlineData
       ? [

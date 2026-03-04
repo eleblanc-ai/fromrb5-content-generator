@@ -2,12 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
-import type { Thread, ContentItem } from '../shared/config/supabase'
+import type { Thread, ContentItem, Message } from '../shared/config/supabase'
 
 // ---- Mock supabase with chainable query builders ----
 
 const mockThreadsOrder = vi.hoisted(() => vi.fn())
 const mockMessagesLimit = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({ data: [], error: null }),
+)
+const mockMessagesAllOrder = vi.hoisted(() =>
   vi.fn().mockResolvedValue({ data: [], error: null }),
 )
 const mockItemSingle = vi.hoisted(() =>
@@ -27,6 +30,7 @@ vi.mock('../shared/config/supabase', () => ({
               eq: () => ({
                 order: () => ({ limit: mockMessagesLimit }),
               }),
+              order: mockMessagesAllOrder,
             }),
           }),
         }
@@ -74,7 +78,14 @@ const generatedItem: ContentItem = {
 // ---- Feature mocks ----
 
 vi.mock('../features/generate', () => ({
-  GenerateForm: ({ onResult }: { onResult: (thread: Thread, item: ContentItem) => void }) => (
+  GenerateForm: ({
+    onResult,
+  }: {
+    onResult: (thread: Thread, item: ContentItem) => void
+    onThreadStarted: (thread: Thread) => void
+    resumeThread?: Thread
+    resumeMessages?: Message[]
+  }) => (
     <button onClick={() => onResult(generatedThread, generatedItem)}>Generate</button>
   ),
 }))
@@ -123,6 +134,8 @@ describe('App', () => {
     mockThreadsOrder.mockReset()
     mockMessagesLimit.mockReset()
     mockMessagesLimit.mockResolvedValue({ data: [], error: null })
+    mockMessagesAllOrder.mockReset()
+    mockMessagesAllOrder.mockResolvedValue({ data: [], error: null })
     mockItemSingle.mockReset()
     mockItemSingle.mockResolvedValue({ data: null, error: null })
   })
@@ -140,9 +153,8 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(mockThreadsOrder).toHaveBeenCalledWith('created_at', { ascending: false })
+      expect(screen.getByRole('button', { name: 'Generate' })).toBeInTheDocument()
     })
-
-    expect(screen.getByRole('button', { name: 'Generate' })).toBeInTheDocument()
   })
 
   it('loads threads on mount and shows them in sidebar', async () => {
@@ -199,6 +211,12 @@ describe('App', () => {
       ],
       error: null,
     })
+    // thread-1 is a completed thread so ThreadView renders with Delete button
+    mockMessagesLimit.mockResolvedValue({
+      data: [{ id: 'msg-1', thread_id: 'thread-1', role: 'assistant', content: 'done', flyer_item_id: 'item-1', created_at: '2026-03-03T11:00:00Z' }],
+      error: null,
+    })
+    mockItemSingle.mockResolvedValue({ data: generatedItem, error: null })
 
     render(<App />)
 
@@ -212,6 +230,32 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: 'Thread to delete' })).not.toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Thread to keep' })).toBeInTheDocument()
+    })
+  })
+
+  it('shows GenerateForm when clicking an in-progress thread with no flyer', async () => {
+    mockThreadsOrder.mockResolvedValue({
+      data: [{ ...mockThread, id: 'thread-1', title: 'In progress thread' }],
+      error: null,
+    })
+    // No flyer_item_id — in-progress thread
+    mockMessagesLimit.mockResolvedValue({
+      data: [{ id: 'msg-1', thread_id: 'thread-1', role: 'assistant', content: 'What product?', flyer_item_id: null, created_at: '2026-03-03T10:00:00Z' }],
+      error: null,
+    })
+    mockMessagesAllOrder.mockResolvedValue({
+      data: [
+        { id: 'msg-1', thread_id: 'thread-1', role: 'assistant', content: 'What product?', flyer_item_id: null, created_at: '2026-03-03T10:00:00Z' },
+        { id: 'msg-2', thread_id: 'thread-1', role: 'user', content: 'Jasmine tea', flyer_item_id: null, created_at: '2026-03-03T10:01:00Z' },
+      ],
+      error: null,
+    })
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Generate' })).toBeInTheDocument()
+      expect(screen.queryByTestId('thread-view')).not.toBeInTheDocument()
     })
   })
 })

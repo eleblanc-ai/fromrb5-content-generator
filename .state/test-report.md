@@ -153,6 +153,29 @@ Replaced flat history list with a ChatGPT/Claude-style thread sidebar. Each brie
 
 ---
 
+## Slice 13: Thread Interactions
+
+Delete threads, save interview history to DB (early + incremental), display message history in thread view, refinement chat input, mid-interview persistence, and resume in-progress interviews.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| — | `src/app/App.test.tsx` | renders the app shell with header and sidebar | ✅ Pass | Header + sidebar nav present |
+| — | `src/app/App.test.tsx` | shows generate form when there are no threads | ✅ Pass | New-thread view rendered when thread list empty |
+| — | `src/app/App.test.tsx` | loads threads on mount and shows them in sidebar | ✅ Pass | Threads rendered in sidebar |
+| — | `src/app/App.test.tsx` | shows generate form when new flyer button is clicked | ✅ Pass | handleNewThread switches to new-thread view |
+| — | `src/app/App.test.tsx` | adds a new thread to the sidebar and shows thread view when generation completes | ✅ Pass | onResult prepends thread; ThreadView shown |
+| — | `src/app/App.test.tsx` | removes thread from sidebar when onThreadDeleted fires | ✅ Pass | handleThreadDeleted removes thread + shows generate form |
+| — | `src/app/App.test.tsx` | shows GenerateForm when clicking an in-progress thread with no flyer | ✅ Pass | In-progress threads route to resume GenerateForm, not ThreadView |
+| — | `src/features/generate/GenerateForm.test.tsx` | creates thread on first user message and notifies onThreadStarted | ✅ Pass | Thread created on first submit; sidebar updated immediately |
+| — | `src/features/generate/GenerateForm.test.tsx` | restores conversation when resume props are provided without calling interview-flyer | ✅ Pass | Resumed messages displayed instantly; no API call on mount |
+| — | `src/features/threads/ThreadView.test.tsx` | loads and displays message history on mount | ✅ Pass | Interview messages fetched and rendered as chat bubbles |
+| — | `src/features/threads/ThreadView.test.tsx` | shows refinement input when item is present | ✅ Pass | Refinement chat input visible when flyer item loaded |
+| — | `src/features/threads/ThreadView.test.tsx` | hides refinement input when item is null | ✅ Pass | No chat input shown for in-progress threads (before flyer) |
+| — | `src/features/threads/ThreadView.test.tsx` | submits refinement and fires onItemChanged | ✅ Pass | Refinement invokes generate-flyer with refinementMessage + parentId |
+| — | `src/features/threads/ThreadView.test.tsx` | shows generating state during refinement | ✅ Pass | "Generating..." shown while generate-flyer is pending |
+
+---
+
 ## AI Interview + Typewriter
 
 Replaced the scripted 10-step flyer brief form with an AI-driven conversational interview. `interview-flyer` edge function calls Claude with a JSON-mode system prompt; `GenerateForm` drives the chat turn-by-turn and auto-generates on `complete: true`. Added client-side typewriter animation and typing dots.

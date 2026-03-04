@@ -4,8 +4,7 @@ import type {
   ContentItem,
   FlyerBrief,
   FlyerGenerationRequest,
-  FlyerFormat,
-  FlyerRenderMode,
+  Message,
   Thread,
 } from '../../shared/config/supabase'
 
@@ -93,9 +92,12 @@ function TypingDots() {
 
 interface Props {
   onResult: (thread: Thread, item: ContentItem) => void
+  onThreadStarted: (thread: Thread) => void
+  resumeThread?: Thread
+  resumeMessages?: Message[]
 }
 
-export default function GenerateForm({ onResult }: Props) {
+export default function GenerateForm({ onResult, onThreadStarted, resumeThread, resumeMessages }: Props) {
   const [messages, setMessages] = useState<DisplayMessage[]>([])
   const [history, setHistory] = useState<HistoryMessage[]>([])
   const [currentInput, setCurrentInput] = useState('')
@@ -103,9 +105,11 @@ export default function GenerateForm({ onResult }: Props) {
   const [streamingMessage, setStreamingMessage] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [currentThread, setCurrentThread] = useState<Thread | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const mountedRef = useRef(false)
   const typewriterRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     return () => {
@@ -114,8 +118,26 @@ export default function GenerateForm({ onResult }: Props) {
   }, [])
 
   useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [currentInput])
+
+  // Intentional mount-only effect: resume props initialize state once on first render
+  useEffect(() => {
     if (mountedRef.current) return
     mountedRef.current = true
+
+    if (resumeThread && resumeMessages) {
+      // Restore from persisted DB history — skip startInterview API call
+      setCurrentThread(resumeThread)
+      const interviewMsgs = resumeMessages.filter((m) => m.flyer_item_id === null)
+      setMessages(interviewMsgs.map((m) => ({ role: m.role, text: m.content })))
+      setHistory(interviewMsgs.map((m) => ({ role: m.role, content: m.content })))
+      setInterviewLoading(false)
+      return
+    }
 
     async function startInterview() {
       const { data, error: fnError } = await supabase.functions.invoke('interview-flyer', {
@@ -141,6 +163,7 @@ export default function GenerateForm({ onResult }: Props) {
     }
 
     startInterview()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -172,28 +195,17 @@ export default function GenerateForm({ onResult }: Props) {
     }, TYPEWRITER_MS)
   }
 
-  async function triggerGeneration(brief: FlyerBrief) {
+  async function triggerGeneration(brief: FlyerBrief, thread: Thread) {
     setGenerating(true)
     setError(null)
 
-    const selectedFormat = brief.format as FlyerFormat
-    const selectedRenderMode = brief.renderMode as FlyerRenderMode
     const threadTitle = brief.campaignGoal.slice(0, 60) || 'Untitled flyer'
 
+    // Update thread title now that we have the campaign goal
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: threadData, error: threadError } = (await (supabase as any)
-      .from('threads')
-      .insert({ title: threadTitle, format: selectedFormat, render_mode: selectedRenderMode })
-      .select()
-      .single()) as { data: Thread | null; error: { message: string } | null }
+    await (supabase as any).from('threads').update({ title: threadTitle }).eq('id', thread.id)
 
-    if (threadError || !threadData) {
-      setError(threadError?.message ?? 'Failed to create thread')
-      setGenerating(false)
-      return
-    }
-
-    const thread: Thread = threadData
+    const finalThread: Thread = { ...thread, title: threadTitle }
     const prompt = toPrompt(brief)
 
     const requestBody: FlyerGenerationRequest = {
@@ -218,20 +230,20 @@ export default function GenerateForm({ onResult }: Props) {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any).from('messages').insert({
-      thread_id: thread.id,
+      thread_id: finalThread.id,
       role: 'user',
       content: prompt,
       flyer_item_id: null,
     })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any).from('messages').insert({
-      thread_id: thread.id,
+      thread_id: finalThread.id,
       role: 'assistant',
       content: 'Generated flyer',
       flyer_item_id: mergedItem.id,
     })
 
-    onResult(thread, mergedItem)
+    onResult(finalThread, mergedItem)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -239,14 +251,53 @@ export default function GenerateForm({ onResult }: Props) {
     const text = currentInput.trim()
     if (!text || interviewLoading || streamingMessage !== null || generating) return
 
-    const newUserMessage: DisplayMessage = { role: 'user', text }
-    const newMessages = [...messages, newUserMessage]
-    setMessages(newMessages)
+    setMessages((prev) => [...prev, { role: 'user', text }])
     setCurrentInput('')
     setInterviewLoading(true)
     setError(null)
 
     const updatedHistory: HistoryMessage[] = [...history, { role: 'user', content: text }]
+
+    // Get or create thread
+    let thread = currentThread
+    if (!thread) {
+      // First user message: create thread and batch-insert opening Q + this message
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: threadData, error: threadError } = (await (supabase as any)
+        .from('threads')
+        .insert({ title: text.slice(0, 60) || 'New conversation', format: 'instagram_post', render_mode: 'ai_composed' })
+        .select()
+        .single()) as { data: Thread | null; error: { message: string } | null }
+
+      if (threadError || !threadData) {
+        setError(threadError?.message ?? 'Failed to create thread')
+        setInterviewLoading(false)
+        return
+      }
+
+      thread = threadData
+      setCurrentThread(thread)
+      onThreadStarted(thread)
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).from('messages').insert(
+        updatedHistory.map((m) => ({
+          thread_id: thread!.id,
+          role: m.role,
+          content: m.content,
+          flyer_item_id: null,
+        })),
+      )
+    } else {
+      // Subsequent messages: insert just this user message
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).from('messages').insert({
+        thread_id: thread.id,
+        role: 'user',
+        content: text,
+        flyer_item_id: null,
+      })
+    }
 
     const { data, error: fnError } = await supabase.functions.invoke('interview-flyer', {
       body: { history: updatedHistory, message: text },
@@ -270,8 +321,17 @@ export default function GenerateForm({ onResult }: Props) {
     setInterviewLoading(false)
     startTypewriter(body.message)
 
+    // Insert assistant response to DB
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from('messages').insert({
+      thread_id: thread.id,
+      role: 'assistant',
+      content: body.message,
+      flyer_item_id: null,
+    })
+
     if (body.complete && body.brief) {
-      triggerGeneration(body.brief)
+      triggerGeneration(body.brief, thread)
     }
   }
 
@@ -286,7 +346,7 @@ export default function GenerateForm({ onResult }: Props) {
             className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-xs sm:max-w-sm rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+              className={`max-w-xs sm:max-w-sm rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
                 msg.role === 'user'
                   ? 'bg-purple-600 text-white rounded-br-sm'
                   : 'bg-surface text-ink border border-border rounded-bl-sm'
@@ -316,19 +376,26 @@ export default function GenerateForm({ onResult }: Props) {
       {generating ? (
         <p className="text-sm text-ink-muted text-center py-2">Generating your flyer...</p>
       ) : (
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <input
+        <form onSubmit={handleSubmit} className="flex items-end gap-2">
+          <textarea
+            ref={textareaRef}
             value={currentInput}
             onChange={(e) => setCurrentInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                handleSubmit(e as unknown as React.FormEvent)
+              }
+            }}
             placeholder="Type your answer..."
             disabled={isDisabled}
             autoFocus
-            className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-canvas text-ink placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:opacity-50"
+            className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-canvas text-ink placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:opacity-50 resize-none max-h-40 overflow-y-auto"
           />
           <button
             type="submit"
             disabled={!currentInput.trim() || isDisabled}
-            className="bg-purple-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="bg-purple-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
             aria-label="Send"
           >
             →

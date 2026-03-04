@@ -34,6 +34,8 @@ export interface FlyerGenerationRequest {
   prompt: string
   flyer: FlyerBrief
   copyOverride?: FlyerCopyBlock
+  parentId?: string
+  refinementMessage?: string
 }
 
 export interface ContentItem {
