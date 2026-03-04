@@ -2,9 +2,9 @@
 # Cosmo
 ![starry background with colorful clouds](/img/readme-cover.png)
 
-Cosmo is a template repository for building React apps with an AI dev partner. Cosmo interviews you to write a spec, then builds your app in slices: focused, self-contained units of work scoped to one feature or concern, each built with tests and approved by you before the next one begins.
+Cosmo is a template for building React apps with **Claude Code** as your dev partner. Cosmo interviews you to write a spec, then builds your app in slices: focused, self-contained units of work scoped to one feature or concern, each built with tests and approved by you before the next one begins.
 
-The `cosmo-instructions/` folder contains the Cosmo framework. Your project files live alongside it in the workspace.
+**Requires Claude Code** (Anthropic's CLI agent). Also works with GitHub Copilot agent mode in VS Code when Claude is selected as the model. Any Claude-powered coding agent that supports project-level instructions and tool use should work.
 
 ---
 
@@ -49,16 +49,16 @@ gh repo create my-project --template eleblanc-ai/cosmo --clone --private
 
 This creates a fresh repo in your GitHub account with a clean history and clones it locally.
 
-**2. Open in your AI coding agent**
+**2. Open in Claude Code**
 
-Open your cloned folder with a Claude coding agent that supports project-level instructions and tool use. Tested with GitHub Copilot agent mode in VS Code (with Claude).
+Open your cloned folder in Claude Code (`claude` in your terminal from that directory). GitHub Copilot agent mode in VS Code with Claude selected also works.
 
 **3. Start a session**
 
-Set your agent's project instructions to:
+The template includes a `CLAUDE.md` file that Claude Code reads automatically when it loads your project. When you're ready, say:
 
 ```
-Read cosmo-instructions/cosmo.md and follow it.
+cosmo start
 ```
 
 Cosmo checks for saved state and picks up exactly where you left off, or starts Phase 1 if you're new.
@@ -72,7 +72,7 @@ pause cosmo
 Cosmo saves its phase context so the next session resumes without losing anything. To restart after pausing:
 
 ```
-start cosmo
+cosmo start
 ```
 
 ---
@@ -90,6 +90,8 @@ my-project/
 │   ├── templates.md       ← Document templates
 │   └── stacks/            ← Stack-specific rules
 ├── VERSION                ← Installed framework version
+├── CLAUDE.md              ← Auto-loads Cosmo instructions (Claude Code)
+├── LICENSE
 ├── .state/          ← Project state
 │   ├── spec.md            ← Your product spec (Phase 1 output)
 │   ├── current-phase.md   ← Resume point when pausing
@@ -128,7 +130,7 @@ Cosmo checks for updates at the start of each session and prompts you to apply t
 ## Example session
 
 ```
-You:    start cosmo
+You:    cosmo start
 Cosmo:  Update available (your version: 1.2, latest: 1.3). Update now? (yes/no)
 
 You:    yes
@@ -168,3 +170,10 @@ Saying **no** at any step keeps you in the loop:
 - **No to spec** — Cosmo asks what's off and keeps refining until you're satisfied.
 - **No to plan** — Cosmo asks what to change and revises the slice proposal.
 - **No to slice** — Cosmo asks what needs to change, goes back to Phase 3 to fix it, then presents the full updated slice for approval again.
+
+---
+
+## Changelog
+
+See [releases](https://github.com/eleblanc-ai/cosmo/releases) for version history.
+

@@ -11,7 +11,8 @@ Use this to verify Cosmo is behaving as specified. Each item is a discrete, obse
 - [ ] On new conversation: `cosmo.md` is auto-loaded by Claude Code — Cosmo identity is active
 
 **On Start:**
-- [ ] Fetches remote `VERSION` and compares to local `VERSION`
+- [ ] Runs `curl -s https://raw.githubusercontent.com/eleblanc-ai/cosmo/master/VERSION` and uses the actual output — does not guess or fabricate the remote version
+- [ ] If curl fails or returns empty: tells the user version check failed and continues with local version
 - [ ] If versions differ: tells the user the current and latest version, asks "Update now? (yes/no)"
 - [ ] If update accepted: downloads and extracts new `cosmo-instructions/`, copies `VERSION`, commits the update, continues startup
 - [ ] If update declined or versions match: continues startup normally
@@ -26,10 +27,20 @@ Use this to verify Cosmo is behaving as specified. Each item is a discrete, obse
 ## Communication
 
 - [ ] Every response starts with the current phase indicator (`📋 Phase 2`, `🔨 Phase 3`, `✅ Phase 4`, etc.)
-- [ ] Every response ends with the routing question for the current phase — no exceptions
-- [ ] Routing questions are not skipped after answering a tangent or side question
+- [ ] Routing question appears only when presenting the phase deliverable (completed spec / completed plan / completed slice)
+- [ ] Routing question is NOT appended to intermediate responses (interview questions, clarifications, tangent answers)
 - [ ] Can answer questions and have natural conversation without leaving the current phase
-- [ ] After any tangent, immediately returns to the current phase and restates the routing question
+- [ ] After any tangent, returns to the current phase and continues from where it left off
+
+---
+
+## Phase 1: Interview
+
+- [ ] Identifies the tech stack during the interview
+- [ ] If the requested stack has a matching file in `cosmo-instructions/stacks/`: records it in spec.md and proceeds
+- [ ] If no matching stack file exists: tells the user it's not supported, lists available stacks, and does not proceed
+- [ ] Asks about UI style: "How should the app look and feel? Any colors, aesthetic, or apps you'd like it to resemble?"
+- [ ] Writes spec to `.state/spec.md` using the Spec Template from `templates.md` — all sections filled
 
 ---
 
