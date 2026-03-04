@@ -329,3 +329,20 @@ Fixed a silent no-op in the FlyerEditor auto-save debounce: `@supabase/postgrest
 | — | All | (no new tests) | ✅ Pass | All 61 existing tests continue to pass |
 
 ---
+
+## Slice 23: Brand Settings Panel
+
+Added the Brand Kit panel with load, save (insert/update), palette management, and close behavior. The panel loads the singleton `brand_settings` row from Supabase on open and upserts on save. 8 new tests cover all key paths; 69/69 total passing.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| 1 | `BrandSettings.test.tsx` | renders brand settings loaded from Supabase | ✅ Pass | Fields populated from DB row |
+| 2 | `BrandSettings.test.tsx` | renders empty form when no brand settings exist | ✅ Pass | Empty state when DB returns null |
+| 3 | `BrandSettings.test.tsx` | calls update on save when settings already exist | ✅ Pass | update().eq() called with correct payload |
+| 4 | `BrandSettings.test.tsx` | calls insert on save when no settings exist | ✅ Pass | insert() called with form data |
+| 5 | `BrandSettings.test.tsx` | calls onClose when close button is clicked | ✅ Pass | ✕ button triggers close |
+| 6 | `BrandSettings.test.tsx` | adds a color swatch when + Add color is clicked | ✅ Pass | Swatch added to palette |
+| 7 | `BrandSettings.test.tsx` | removes a color swatch when Remove is clicked | ✅ Pass | Swatch removed from palette |
+| 8 | `BrandSettings.test.tsx` | hides + Add color button when palette has 5 colors | ✅ Pass | Add button hidden at max capacity |
+
+---

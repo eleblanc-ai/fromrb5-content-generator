@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { GenerateForm } from '../features/generate'
 import { ThreadSidebar, ThreadView } from '../features/threads'
+import { BrandSettingsPanel } from '../features/brand'
 import { supabase } from '../shared/config/supabase'
 import type { ContentItem, Message, Thread } from '../shared/config/supabase'
 
@@ -15,6 +16,7 @@ export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('new-thread')
   const [resumeThread, setResumeThread] = useState<Thread | null>(null)
   const [resumeMessages, setResumeMessages] = useState<Message[]>([])
+  const [showBrandKit, setShowBrandKit] = useState(false)
 
   const loadThreadItem = useCallback(async (thread: Thread) => {
     setActiveItem(null)
@@ -129,9 +131,18 @@ export default function App() {
 
   return (
     <div className="h-screen flex flex-col bg-canvas text-ink">
-      <header className="border-b border-border px-8 py-5 shrink-0">
+      <header className="border-b border-border px-8 py-5 shrink-0 flex items-center justify-between">
         <h1 className="text-base font-semibold tracking-tight">Content Studio</h1>
+        <button
+          type="button"
+          onClick={() => setShowBrandKit(true)}
+          className="text-xs text-ink-muted hover:text-ink transition-colors"
+        >
+          Brand Kit
+        </button>
       </header>
+
+      {showBrandKit && <BrandSettingsPanel onClose={() => setShowBrandKit(false)} />}
 
       <div className="flex flex-1 overflow-hidden">
         <ThreadSidebar
