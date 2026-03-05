@@ -384,4 +384,12 @@ describe('FlyerEditor', () => {
 
     vi.useRealTimers()
   })
+
+  it('shows brand logo in canvas preview when logoUrl prop is set', () => {
+    render(<FlyerEditor item={mockFlyerItem} logoUrl="https://example.com/logo.png" />)
+
+    const logo = screen.getByAltText('Brand logo')
+    expect(logo).toBeInTheDocument()
+    expect(logo).toHaveAttribute('src', 'https://example.com/logo.png')
+  })
 })

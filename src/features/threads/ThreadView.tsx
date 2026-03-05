@@ -7,6 +7,7 @@ interface Props {
   thread: Thread
   item: ContentItem | null
   loading?: boolean
+  logoUrl?: string | null
   onItemChanged: (item: ContentItem) => void
   onThreadDeleted: () => void
 }
@@ -15,6 +16,7 @@ export default function ThreadView({
   thread,
   item,
   loading,
+  logoUrl,
   onItemChanged,
   onThreadDeleted,
 }: Props) {
@@ -166,6 +168,7 @@ export default function ThreadView({
           <FlyerEditor
             item={item}
             threadId={thread.id}
+            logoUrl={logoUrl}
             onIterated={handleItemChanged}
             onDeleted={onThreadDeleted}
           />

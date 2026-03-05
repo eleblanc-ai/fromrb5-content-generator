@@ -42,6 +42,13 @@ vi.mock('../shared/config/supabase', () => ({
           }),
         }
       }
+      if (table === 'brand_settings') {
+        return {
+          select: () => ({ limit: () => ({ maybeSingle: () => Promise.resolve({ data: null }) }) }),
+          delete: () => ({ eq: () => Promise.resolve({ error: null }) }),
+          update: () => ({ eq: () => Promise.resolve({ error: null }) }),
+        }
+      }
       return {}
     },
   },

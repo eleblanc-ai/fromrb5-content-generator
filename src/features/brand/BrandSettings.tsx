@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../shared/config/supabase'
 import type { BrandSettings } from '../../shared/config/supabase'
 
@@ -20,7 +20,10 @@ const AVAILABLE_FONTS = [
 export default function BrandSettingsPanel({ onClose }: Props) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  const logoFileRef = useRef<HTMLInputElement>(null)
 
   const [settingsId, setSettingsId] = useState<string | null>(null)
   const [brandName, setBrandName] = useState('')
@@ -106,6 +109,22 @@ export default function BrandSettingsPanel({ onClose }: Props) {
 
   function removeColor(index: number) {
     setColorPalette(colorPalette.filter((_, i) => i !== index))
+  }
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    const ext = file.name.split('.').pop() ?? 'png'
+    const path = `logos/${crypto.randomUUID()}.${ext}`
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).storage.from('content-images').upload(path, file, { contentType: file.type })
+    if (!error) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: { publicUrl } } = (supabase as any).storage.from('content-images').getPublicUrl(path)
+      setLogoUrl(publicUrl as string)
+    }
+    setUploading(false)
   }
 
   return (
@@ -229,6 +248,48 @@ export default function BrandSettingsPanel({ onClose }: Props) {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-xs font-medium text-ink-muted uppercase tracking-wider block">
+                Logo
+              </span>
+              {logoUrl ? (
+                <div className="flex items-center gap-3">
+                  <img
+                    src={logoUrl}
+                    alt="Brand logo"
+                    className="h-12 w-auto object-contain border border-border rounded"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setLogoUrl(null)}
+                    aria-label="Remove logo"
+                    className="text-xs text-ink-muted hover:text-red-500 transition-colors"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <input
+                    ref={logoFileRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    aria-label="Logo file input"
+                    onChange={handleLogoUpload}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => logoFileRef.current?.click()}
+                    disabled={uploading}
+                    className="text-xs text-ink-muted hover:text-ink transition-colors disabled:opacity-50"
+                  >
+                    {uploading ? 'Uploading…' : '+ Upload logo'}
+                  </button>
+                </>
+              )}
             </div>
 
             {saveError && <p className="text-sm text-red-500">{saveError}</p>}

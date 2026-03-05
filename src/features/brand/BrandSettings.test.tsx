@@ -24,8 +24,16 @@ const mockFrom = vi.hoisted(() =>
   })),
 )
 
+const mockGetPublicUrl = vi.hoisted(() =>
+  vi.fn().mockReturnValue({ data: { publicUrl: 'https://test.com/logo.png' } }),
+)
+const mockStorageUpload = vi.hoisted(() => vi.fn().mockResolvedValue({ error: null }))
+const mockStorageFrom = vi.hoisted(() =>
+  vi.fn(() => ({ upload: mockStorageUpload, getPublicUrl: mockGetPublicUrl })),
+)
+
 vi.mock('../../shared/config/supabase', () => ({
-  supabase: { from: mockFrom },
+  supabase: { from: mockFrom, storage: { from: mockStorageFrom } },
 }))
 
 const mockBrandSettings = {
@@ -48,6 +56,10 @@ describe('BrandSettingsPanel', () => {
     mockFrom.mockClear()
     mockUpdate.mockClear()
     mockInsert.mockClear()
+    mockStorageUpload.mockReset()
+    mockStorageUpload.mockResolvedValue({ error: null })
+    mockGetPublicUrl.mockClear()
+    mockStorageFrom.mockClear()
   })
 
   it('renders brand settings loaded from Supabase', async () => {
@@ -163,5 +175,51 @@ describe('BrandSettingsPanel', () => {
       expect(screen.getByLabelText('Color 5')).toBeInTheDocument()
     })
     expect(screen.queryByText('+ Add color')).not.toBeInTheDocument()
+  })
+
+  it('shows logo preview image when logo_url is set', async () => {
+    mockMaybeSingle.mockResolvedValue({
+      data: { ...mockBrandSettings, logo_url: 'https://example.com/logo.png' },
+    })
+    render(<BrandSettingsPanel onClose={vi.fn()} />)
+
+    await waitFor(() => {
+      const logo = screen.getByAltText('Brand logo')
+      expect(logo).toBeInTheDocument()
+      expect(logo).toHaveAttribute('src', 'https://example.com/logo.png')
+    })
+  })
+
+  it('clears logo preview when Remove logo is clicked', async () => {
+    mockMaybeSingle.mockResolvedValue({
+      data: { ...mockBrandSettings, logo_url: 'https://example.com/logo.png' },
+    })
+    render(<BrandSettingsPanel onClose={vi.fn()} />)
+
+    await waitFor(() => {
+      expect(screen.getByAltText('Brand logo')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove logo' }))
+    expect(screen.queryByAltText('Brand logo')).not.toBeInTheDocument()
+  })
+
+  it('calls Supabase Storage upload when logo file is selected', async () => {
+    render(<BrandSettingsPanel onClose={vi.fn()} />)
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Logo file input')).toBeInTheDocument()
+    })
+
+    const file = new File(['logo'], 'logo.png', { type: 'image/png' })
+    await userEvent.upload(screen.getByLabelText('Logo file input'), file)
+
+    await waitFor(() => {
+      expect(mockStorageUpload).toHaveBeenCalled()
+    })
+    expect(mockGetPublicUrl).toHaveBeenCalled()
+    await waitFor(() => {
+      expect(screen.getByAltText('Brand logo')).toHaveAttribute('src', 'https://test.com/logo.png')
+    })
   })
 })

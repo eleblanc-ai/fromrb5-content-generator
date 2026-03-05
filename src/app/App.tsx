@@ -17,6 +17,21 @@ export default function App() {
   const [resumeThread, setResumeThread] = useState<Thread | null>(null)
   const [resumeMessages, setResumeMessages] = useState<Message[]>([])
   const [showBrandKit, setShowBrandKit] = useState(false)
+  const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (showBrandKit) return
+    async function fetchBrandLogo() {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = (await (supabase as any)
+        .from('brand_settings')
+        .select('logo_url')
+        .limit(1)
+        .maybeSingle()) as { data: { logo_url: string | null } | null }
+      setBrandLogoUrl(data?.logo_url ?? null)
+    }
+    fetchBrandLogo()
+  }, [showBrandKit])
 
   const loadThreadItem = useCallback(async (thread: Thread) => {
     setActiveItem(null)
@@ -171,6 +186,7 @@ export default function App() {
               thread={activeThread}
               item={activeItem}
               loading={itemLoading}
+              logoUrl={brandLogoUrl}
               onItemChanged={setActiveItem}
               onThreadDeleted={handleThreadDeleted}
             />

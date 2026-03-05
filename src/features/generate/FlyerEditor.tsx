@@ -7,6 +7,7 @@ import type { FlyerTypography } from './typography'
 interface Props {
   item: ContentItem
   threadId?: string
+  logoUrl?: string | null
   onIterated?: (item: ContentItem) => void
   onDeleted?: () => void
 }
@@ -120,7 +121,7 @@ function getWrappedLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: 
   return lines
 }
 
-export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: Props) {
+export default function FlyerEditor({ item, threadId, logoUrl, onIterated, onDeleted }: Props) {
   const metadata = useMemo(() => parseMetadata(item), [item])
 
   const typography = useMemo(
@@ -422,6 +423,25 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
         ctx.shadowBlur = 0
       }
 
+      // Draw brand logo in bottom-right corner
+      if (logoUrl) {
+        await new Promise<void>((resolve) => {
+          const logoImg = new Image()
+          logoImg.crossOrigin = 'anonymous'
+          logoImg.onload = () => {
+            const maxLogoWidth = width * 0.2
+            const scale = Math.min(maxLogoWidth / logoImg.width, 1)
+            const logoW = logoImg.width * scale
+            const logoH = logoImg.height * scale
+            const pad = 24
+            ctx.drawImage(logoImg, width - logoW - pad, height - logoH - pad, logoW, logoH)
+            resolve()
+          }
+          logoImg.onerror = () => resolve()
+          logoImg.src = logoUrl
+        })
+      }
+
       const link = document.createElement('a')
       link.href = canvas.toDataURL('image/png')
       link.download = `flyer-${item.id}.png`
@@ -577,6 +597,15 @@ export default function FlyerEditor({ item, threadId, onIterated, onDeleted }: P
             />
           </div>
         ))}
+
+        {logoUrl && (
+          <img
+            src={logoUrl}
+            alt="Brand logo"
+            crossOrigin="anonymous"
+            className="absolute bottom-2 right-2 max-w-[20%] max-h-[10%] object-contain pointer-events-none"
+          />
+        )}
       </div>
 
       <div className="px-4 py-3 space-y-2">

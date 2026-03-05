@@ -356,3 +356,16 @@ Fetches brand settings server-side in the edge function and injects brand name/t
 | — | N/A | — | N/A | Edge function — no unit tests |
 
 ---
+
+## Slice 25: Logo upload + canvas overlay
+
+Added logo upload to Brand Kit (Supabase Storage) and logo overlay to the Mode B canvas. Logo URL lifted to App state and refetched when Brand Kit closes so it propagates immediately without remounting.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| 1 | `src/features/brand/BrandSettings.test.tsx` | shows logo preview image when logo_url is set | ✅ Pass | Logo img renders with correct src |
+| 2 | `src/features/brand/BrandSettings.test.tsx` | clears logo preview when Remove logo is clicked | ✅ Pass | Remove button hides the preview |
+| 3 | `src/features/brand/BrandSettings.test.tsx` | calls Supabase Storage upload when logo file is selected | ✅ Pass | Storage upload called; publicUrl shown in preview |
+| 4 | `src/features/generate/FlyerEditor.test.tsx` | shows brand logo in canvas preview when logoUrl prop is set | ✅ Pass | Logo img rendered when logoUrl prop provided |
+
+---
