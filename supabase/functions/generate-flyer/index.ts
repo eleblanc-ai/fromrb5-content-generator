@@ -51,7 +51,57 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
-async function generateCopyBlock(flyer: FlyerBrief, apiKey: string): Promise<FlyerCopyBlock> {
+function hexToColorDescription(hex: string): string {
+  const match = /^#([0-9a-fA-F]{6})$/.exec(hex)
+  if (!match) return hex
+
+  const r = parseInt(match[1].slice(0, 2), 16) / 255
+  const g = parseInt(match[1].slice(2, 4), 16) / 255
+  const b = parseInt(match[1].slice(4, 6), 16) / 255
+
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const l = (max + min) / 2
+  const d = max - min
+
+  if (d < 0.08) {
+    if (l < 0.15) return 'near black'
+    if (l > 0.92) return 'near white'
+    if (l < 0.4) return 'dark gray'
+    if (l < 0.65) return 'medium gray'
+    return 'light gray'
+  }
+
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+  let h: number
+  if (max === r) h = (((g - b) / d + (g < b ? 6 : 0)) / 6) * 360
+  else if (max === g) h = (((b - r) / d + 2) / 6) * 360
+  else h = (((r - g) / d + 4) / 6) * 360
+
+  const lightness = l < 0.25 ? 'deep' : l < 0.45 ? 'dark' : l < 0.65 ? 'medium' : l < 0.82 ? 'light' : 'pale'
+  const saturation = s < 0.35 ? 'muted ' : ''
+
+  let hue: string
+  if (h < 20 || h >= 340) hue = 'red'
+  else if (h < 45) hue = 'orange'
+  else if (h < 70) hue = 'yellow'
+  else if (h < 160) hue = 'green'
+  else if (h < 200) hue = 'teal'
+  else if (h < 255) hue = 'blue'
+  else if (h < 290) hue = 'purple'
+  else if (h < 340) hue = 'pink'
+  else hue = 'red'
+
+  return `${lightness} ${saturation}${hue}`
+}
+
+interface BrandContext {
+  name: string
+  tagline: string
+  colorPalette: string[]
+}
+
+async function generateCopyBlock(flyer: FlyerBrief, apiKey: string, brand?: BrandContext): Promise<FlyerCopyBlock> {
   const anthropic = new Anthropic({ apiKey })
 
   const message = await anthropic.messages.create({
@@ -69,6 +119,8 @@ async function generateCopyBlock(flyer: FlyerBrief, apiKey: string): Promise<Fly
           `Key details: ${flyer.keyDetails}`,
           `CTA hint: ${flyer.cta}`,
           `Tone: ${flyer.tone}`,
+          ...(brand?.name ? [`Brand name: ${brand.name}`] : []),
+          ...(brand?.tagline ? [`Brand tagline: ${brand.tagline}`] : []),
           'Return JSON only — no markdown, no explanation.',
         ].join('\n'),
       },
@@ -97,7 +149,7 @@ function getFormatInstructions(format: FlyerFormat) {
   return 'Canvas: 1080x1080 square composition for Instagram Post. Keep balanced hierarchy and center-safe margins.'
 }
 
-function buildFlyerImagePrompt(flyer: FlyerBrief, copy: FlyerCopyBlock, refinementMessage?: string): string {
+function buildFlyerImagePrompt(flyer: FlyerBrief, copy: FlyerCopyBlock, refinementMessage?: string, brand?: BrandContext): string {
   const formatInstructions = getFormatInstructions(flyer.format)
   const refinementSuffix = refinementMessage ? `\nRefinement request: "${refinementMessage}"` : ''
 
@@ -124,7 +176,11 @@ function buildFlyerImagePrompt(flyer: FlyerBrief, copy: FlyerCopyBlock, refineme
     'Pure visual composition only — textures, gradients, product photography, botanical elements.',
     zoneGuide,
     formatInstructions,
-    `Color vibe: ${flyer.colorVibe}`,
+    ...(brand?.colorPalette?.length
+      ? [`PRIMARY COLOR PALETTE — use these colors exclusively as the dominant tones: ${brand.colorPalette.map((hex) => `${hexToColorDescription(hex)} (${hex})`).join(', ')}`]
+      : [`Color vibe: ${flyer.colorVibe}`]),
+    ...(brand?.colorPalette?.length ? [`Mood/atmosphere reference (secondary only): ${flyer.colorVibe}`] : []),
+    ...(brand?.name ? [`Brand identity: ${brand.name}${brand.tagline ? ` — ${brand.tagline}` : ''}`] : []),
     `Brand tone: ${flyer.tone}`,
     `Constraints: ${flyer.formatConstraints}`,
     'Design style: premium, calm, editorial tea brand aesthetic.',
@@ -157,7 +213,22 @@ Deno.serve(async (req) => {
       })
     }
 
-    const copy = copyOverride ?? await generateCopyBlock(flyer, Deno.env.get('ANTHROPIC_API_KEY') ?? '')
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    )
+
+    const { data: brandRow } = await supabase
+      .from('brand_settings')
+      .select('brand_name, brand_tagline, color_palette')
+      .limit(1)
+      .maybeSingle() as { data: { brand_name: string; brand_tagline: string; color_palette: string[] } | null }
+
+    const brand: BrandContext | undefined = brandRow
+      ? { name: brandRow.brand_name, tagline: brandRow.brand_tagline, colorPalette: brandRow.color_palette }
+      : undefined
+
+    const copy = copyOverride ?? await generateCopyBlock(flyer, Deno.env.get('ANTHROPIC_API_KEY') ?? '', brand)
 
     const ai = new GoogleGenAI({ apiKey: Deno.env.get('GEMINI_API_KEY') ?? '' })
 
@@ -178,12 +249,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-    )
-
-    const imagePrompt = buildFlyerImagePrompt(flyer, copy, refinementMessage)
+    const imagePrompt = buildFlyerImagePrompt(flyer, copy, refinementMessage, brand)
 
     const contents = sourceInlineData
       ? [

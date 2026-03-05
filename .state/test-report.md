@@ -346,3 +346,13 @@ Added the Brand Kit panel with load, save (insert/update), palette management, a
 | 8 | `BrandSettings.test.tsx` | hides + Add color button when palette has 5 colors | ✅ Pass | Add button hidden at max capacity |
 
 ---
+
+## Slice 24: Brand kit injection into generation
+
+Fetches brand settings server-side in the edge function and injects brand name/tagline into copy generation and brand color palette into the Gemini image prompt. No frontend unit tests added — this slice touches only the Deno edge function. All 69 existing frontend tests continue to pass.
+
+| # | File | Test name | Status | What it verifies |
+|---|------|-----------|--------|-----------------|
+| — | N/A | — | N/A | Edge function — no unit tests |
+
+---

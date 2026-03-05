@@ -1,1 +1,1 @@
-No active phase.
+## Ready for next slice
