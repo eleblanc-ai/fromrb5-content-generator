@@ -423,17 +423,18 @@ export default function FlyerEditor({ item, threadId, logoUrl, onIterated, onDel
         ctx.shadowBlur = 0
       }
 
-      // Draw brand logo in bottom-right corner
+      // Draw brand logo in bottom-right corner — derive size from DOM for WYSIWYG
       if (logoUrl) {
+        const logoEl = containerEl?.querySelector<HTMLImageElement>('img[alt="Brand logo"]')
+        const renderedLogoW = logoEl ? logoEl.getBoundingClientRect().width : null
+        const renderedLogoH = logoEl ? logoEl.getBoundingClientRect().height : null
         await new Promise<void>((resolve) => {
           const logoImg = new Image()
           logoImg.crossOrigin = 'anonymous'
           logoImg.onload = () => {
-            const maxLogoWidth = width * 0.2
-            const scale = Math.min(maxLogoWidth / logoImg.width, 1)
-            const logoW = logoImg.width * scale
-            const logoH = logoImg.height * scale
-            const pad = 24
+            const logoW = renderedLogoW != null ? renderedLogoW * scaleToCanvas : width * 0.1
+            const logoH = renderedLogoH != null ? renderedLogoH * scaleToCanvas : (logoW / logoImg.width) * logoImg.height
+            const pad = 16 * scaleToCanvas
             ctx.drawImage(logoImg, width - logoW - pad, height - logoH - pad, logoW, logoH)
             resolve()
           }
